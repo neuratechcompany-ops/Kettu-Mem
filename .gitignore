@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+*.pyo
+.env
+*.db
+*.db-shm
+*.db-wal
+faiss/
+l3_archive/
+cognitive/
+secrets/
+*.key
+*.pem
+/tmp/
+/logs/

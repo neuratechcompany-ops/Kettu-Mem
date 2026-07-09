@@ -1,0 +1,49 @@
+{
+  "id": "hermes-memory",
+  "name": "Hermes Memory Manager",
+  "description": "Long-term memory with L3 archive, SQLite index, FAISS, Mem0, and context builder. Feature-flagged via HERMES_MEMORY_ENABLED env var.",
+  "contracts": {
+    "hooks": [
+      "session_start",
+      "session_end",
+      "before_prompt_build",
+      "agent_end",
+      "after_tool_call"
+    ]
+  },
+  "activation": {
+    "onStartup": true
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "apiUrl": {
+        "type": "string",
+        "default": "http://127.0.0.1:8765",
+        "description": "MemoryManager HTTP API base URL"
+      },
+      "enabled": {
+        "type": "boolean",
+        "default": true,
+        "description": "Master switch (overridden by HERMES_MEMORY_ENABLED env)"
+      },
+      "extractEveryNTurns": {
+        "type": "integer",
+        "default": 20,
+        "description": "Extract Mem0 facts every N events"
+      },
+      "compressionThreshold": {
+        "type": "number",
+        "default": 0.70,
+        "description": "Trigger compression at this budget utilisation"
+      },
+      "contextStrategy": {
+        "type": "string",
+        "enum": ["tight", "normal", "generous"],
+        "default": "normal",
+        "description": "Context budget strategy"
+      }
+    }
+  }
+}

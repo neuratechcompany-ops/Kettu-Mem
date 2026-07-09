@@ -1,0 +1,568 @@
+#!/usr/bin/env python3
+"""
+Kettu Mem HTTP API Server (FastAPI + Uvicorn).
+
+Production REST endpoints for OpenClaw agent loop integration:
+
+  GET  /health              - liveness check (always returns ok)
+  GET  /ready               - readiness check (all layers healthy)
+  GET  /live                - combined liveness + readiness
+
+  POST /session/start       - start/resume a session
+  POST /session/end         - finalize session
+
+  POST /turn/before         - before_llm_call: retrieve context
+  POST /turn/after          - after_llm_call: record events
+
+  GET  /stats               - full stats across all layers
+  GET  /mem0/search?q=...   - search long-term memory
+  GET  /mem0/all            - list all facts
+  GET  /mem0/stats          - Mem0 statistics
+  GET  /mem0/entities       - entity list
+  GET  /events/last?limit=N - recent events
+
+  POST /compress            - manual compression
+  POST /mem0/add            - add fact
+
+  POST /cognitive/start     - start task
+  POST /cognitive/resume    - resume task
+  POST /cognitive/context   - build cognitive context
+  POST /cognitive/step      - record step
+  POST /cognitive/reflect   - reflection
+  POST /cognitive/strategy  - adjust strategy
+  GET  /cognitive/state     - current state
+  POST /cognitive/space     - set memory space
+
+All endpoints maintain backward compatibility with v0.1.0 response format.
+"""
+import json
+import os
+import sys
+import time
+import uuid
+import traceback
+from pathlib import Path
+from typing import Optional
+from contextlib import asynccontextmanager
+
+# Add project to path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from fastapi import FastAPI, Request, HTTPException
+from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
+
+from retrieval.context_builder import ContextConfig, BudgetStrategy
+from memory.memory_manager import MemoryManager
+from extractors.cognitive_runtime import CognitiveRuntime, MemorySpace, StepOutcome
+from api.security import add_security_middleware
+from utils.logging import add_logging_middleware, setup_logging
+from config import settings
+from api.metrics import add_metrics_endpoint, MetricsMiddleware, metrics
+from utils.logging import get_logger
+
+logger = get_logger("api.server")
+
+# ── Global state ────────────────────────────────────────
+
+_mm: Optional[MemoryManager] = None
+_cr: Optional[CognitiveRuntime] = None
+_startup_time: float = 0.0
+_data_dir: str = ""
+_port: int = 8765
+
+
+# ── Helpers ─────────────────────────────────────────────
+
+def _search_archive(query: str, limit: int = 10) -> list[dict]:
+    """Full-text search in L3 archive events (for decision recovery)."""
+    if not _mm or not _mm._session_id:
+        return []
+    q_words = query.lower().split()
+    events = _mm.l3.read_session(_mm._session_id)
+    hits = []
+    for e in reversed(events):
+        content_lower = e.get("content", "").lower()
+        if all(w in content_lower for w in q_words):
+            hits.append({
+                "step": e["step_id"],
+                "role": e["role"],
+                "type": e["type"],
+                "content": e["content"][:300],
+                "timestamp": e["timestamp"],
+            })
+            if len(hits) >= limit:
+                break
+    return hits
+
+
+def _run_healthcheck() -> list[dict]:
+    """Run comprehensive health check across all layers."""
+    import sqlite3
+    checks = []
+
+    # 1. API layer
+    checks.append({"layer": "api", "status": "ok", "detail": "FastAPI server running"})
+
+    # 2. SQLite metadata
+    try:
+        db = sqlite3.connect(str(_mm.sqlite.db_path))
+        db.execute("SELECT 1")
+        db.execute("CREATE TABLE IF NOT EXISTS _healthcheck_t (t TEXT)")
+        db.execute("INSERT INTO _healthcheck_t VALUES ('ok')")
+        db.execute("DROP TABLE _healthcheck_t")
+        db.close()
+        checks.append({"layer": "sqlite_metadata", "status": "ok", "detail": "writable"})
+    except Exception as e:
+        checks.append({"layer": "sqlite_metadata", "status": "fail", "detail": str(e)[:200]})
+
+    # 3. SQLite mem0
+    try:
+        db_path = _mm.mem0.conn.execute("PRAGMA database_list").fetchone()["file"]
+        db2 = sqlite3.connect(db_path)
+        db2.execute("SELECT COUNT(*) FROM mem0_facts")
+        db2.close()
+        checks.append({"layer": "sqlite_mem0", "status": "ok", "detail": "readable"})
+    except Exception as e:
+        checks.append({"layer": "sqlite_mem0", "status": "fail", "detail": str(e)[:200]})
+
+    # 4. L3 archive
+    try:
+        test_file = _mm.l3.data_dir / "_healthcheck.jsonl"
+        with open(test_file, "w") as f:
+            f.write(json.dumps({"test": "ok"}) + "\n")
+        with open(test_file) as f:
+            assert json.loads(f.readline())["test"] == "ok"
+        os.remove(test_file)
+        checks.append({"layer": "l3_archive", "status": "ok", "detail": "append+read OK"})
+    except Exception as e:
+        checks.append({"layer": "l3_archive", "status": "fail", "detail": str(e)[:200]})
+
+    # 5. FAISS
+    try:
+        stats = _mm.faiss.get_index_stats()
+        if stats.get("exists"):
+            checks.append({"layer": "faiss", "status": "ok",
+                          "detail": f'{stats["count"]} vectors, dim={stats["dim"]}'})
+        else:
+            checks.append({"layer": "faiss", "status": "ok", "detail": "empty (no index yet)"})
+    except Exception as e:
+        checks.append({"layer": "faiss", "status": "fail", "detail": str(e)[:200]})
+
+    # 6. Mem0
+    try:
+        facts = _mm.mem0.get_all(limit=1)
+        checks.append({"layer": "mem0", "status": "ok",
+                      "detail": f'{_mm.mem0.get_stats()["total_facts"]} facts'})
+    except Exception as e:
+        checks.append({"layer": "mem0", "status": "fail", "detail": str(e)[:200]})
+
+    # 7. Cognitive
+    try:
+        state = _cr.get_state() if _cr else {}
+        checks.append({"layer": "cognitive", "status": "ok",
+                      "detail": f'goal={bool(state.get("planning",{}).get("goal"))}, steps={state.get("step_counter",0)}'})
+    except Exception as e:
+        checks.append({"layer": "cognitive", "status": "fail", "detail": str(e)[:200]})
+
+    return checks
+
+
+# ── Application lifecycle ───────────────────────────────
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Startup/shutdown lifecycle."""
+    global _mm, _cr, _startup_time
+    _startup_time = time.time()
+
+    # Initialize MemoryManager + CognitiveRuntime
+    data = _data_dir or settings.data_dir
+    _mm = MemoryManager(data)
+    _cr = CognitiveRuntime(_mm, str(Path(data) / "cognitive"))
+    metrics.set_memory_manager(_mm)
+    setup_logging()
+    logger.info("server_starting", data_dir=data, version="0.2.0")
+
+    yield
+
+    # Shutdown
+    if _mm:
+        _mm.close()
+    logger.info("server_shutdown")
+
+
+# ── FastAPI app ─────────────────────────────────────────
+
+app = FastAPI(
+    title="Kettu Mem",
+    version="0.2.0",
+    description="Cognitive Memory Layer for OpenClaw agents",
+    lifespan=lifespan,
+)
+
+# CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Logging (structlog with request_id) — outermost
+add_logging_middleware(app)
+
+# Metrics (Prometheus) — middleware
+app.add_middleware(MetricsMiddleware)
+
+add_metrics_endpoint(app)
+
+
+# ── Health endpoints ────────────────────────────────────
+
+@app.get("/health")
+async def health():
+    """Liveness: always returns ok if the process is running."""
+    return {"status": "ok", "session": _mm._session_id if _mm else None, "uptime": round(time.time() - _startup_time, 1)}
+
+
+@app.get("/ready")
+async def ready():
+    """Readiness: checks all layers are operational."""
+    checks = _run_healthcheck()
+    all_ok = all(c["status"] == "ok" for c in checks)
+    status = "ready" if all_ok else "not_ready"
+    return {
+        "status": status,
+        "checks": checks,
+        "timestamp": time.time(),
+    }
+
+
+@app.get("/live")
+async def live():
+    """Combined liveness + readiness probe."""
+    checks = _run_healthcheck()
+    all_ok = all(c["status"] == "ok" for c in checks)
+    return {
+        "status": "ok" if all_ok else "degraded",
+        "ready": all_ok,
+        "checks": checks,
+        "uptime": round(time.time() - _startup_time, 1),
+    }
+
+
+@app.get("/health/deep")
+async def health_deep():
+    """Deep health check — backward compatible with v0.1.0."""
+    checks = _run_healthcheck()
+    all_ok = all(c["status"] == "ok" for c in checks)
+    return {
+        "status": "ok" if all_ok else "degraded",
+        "checks": checks,
+        "timestamp": time.time(),
+    }
+
+
+# ── Stats ───────────────────────────────────────────────
+
+@app.get("/stats")
+async def stats():
+    """Full statistics across all layers."""
+    if not _mm:
+        raise HTTPException(503, "MemoryManager not initialized")
+    return _mm.get_archive_stats()
+
+
+# ── Session management ──────────────────────────────────
+
+@app.post("/session/start")
+async def session_start(request: Request):
+    """Start or resume a session."""
+    body = await request.json()
+    sid = body.get("session_id", f"session-{int(time.time())}")
+    project = body.get("project_id", "default")
+    _mm.start_session(sid, project_id=project)
+    return {
+        "status": "started",
+        "session_id": sid,
+        "stats": _mm.get_archive_stats(),
+    }
+
+
+@app.post("/session/end")
+async def session_end(request: Request):
+    """Finalize a session."""
+    body = await request.json()
+    reason = body.get("reason", "manual")
+    if body.get("extract_facts", True):
+        _mm.extract_all_facts()
+    stats = _mm.get_archive_stats()
+    return {
+        "status": "ended",
+        "reason": reason,
+        "stats": stats,
+    }
+
+
+# ── Turn endpoints ──────────────────────────────────────
+
+@app.post("/turn/before")
+async def turn_before(request: Request):
+    """Build context for LLM call."""
+    body = await request.json()
+    query = body.get("query", "")
+    strategy_name = body.get("strategy", "normal")
+    system_prompt = body.get("system_prompt")
+    tools = body.get("tools", [])
+    budget = body.get("token_budget")
+
+    strategy = getattr(BudgetStrategy, strategy_name.upper(), BudgetStrategy.NORMAL)
+    config = ContextConfig.from_strategy(strategy) if not budget else ContextConfig(token_budget=budget)
+
+    prompt, stats = _mm.build_context(
+        query=query,
+        system_prompt=system_prompt,
+        tools=tools,
+        config=config,
+    )
+
+    return {
+        "status": "context_built",
+        "prompt": prompt,
+        "stats": stats,
+    }
+
+
+@app.post("/turn/after")
+async def turn_after(request: Request):
+    """Record events after LLM call."""
+    body = await request.json()
+    events = body.get("events", [])
+    extract_facts = body.get("extract_facts", True)
+
+    recorded = []
+    for evt in events:
+        eid = _mm.record_event(
+            role=evt.get("role", "unknown"),
+            event_type=evt.get("type", "message"),
+            content=evt.get("content", ""),
+            refs=evt.get("refs"),
+            meta=evt.get("meta"),
+        )
+        recorded.append(eid)
+
+    stats = _mm.mem0.get_stats() if _mm else {}
+    recent_count = _mm.sqlite.get_session_info(_mm._session_id).get("total_events", 0) if _mm else 0
+
+    return {
+        "status": "recorded",
+        "event_ids": recorded,
+        "count": len(recorded),
+        "total_events": recent_count,
+        "mem0_facts": stats.get("total_facts", 0),
+    }
+
+
+# ── Compression ─────────────────────────────────────────
+
+@app.post("/compress")
+async def compress(request: Request):
+    """Manual compression."""
+    body = await request.json()
+    end_step = body.get("end_step")
+    result = _mm.compress(end_step=end_step)
+    return {"status": "compressed", "result": result}
+
+
+# ── Events ──────────────────────────────────────────────
+
+@app.get("/events/last")
+async def events_last(request: Request):
+    """Get recent events."""
+    limit = int(request.query_params.get("limit", 20))
+    recent = _mm.sqlite.get_recent_events(_mm._session_id, limit=limit) if _mm else []
+    return {"events": recent, "count": len(recent)}
+
+
+# ── Mem0 endpoints ──────────────────────────────────────
+
+@app.get("/mem0/search")
+async def mem0_search(request: Request):
+    """Search long-term memory."""
+    query = request.query_params.get("q", "")
+    limit = int(request.query_params.get("limit", 10))
+    facts = _mm.get_mem0_context(query, limit) if _mm else []
+    archive_hits = _search_archive(query, limit) if _mm else []
+    return {
+        "query": query,
+        "results": facts,
+        "archive_hits": archive_hits,
+        "count": len(facts),
+        "archive_count": len(archive_hits),
+    }
+
+
+@app.get("/mem0/all")
+async def mem0_all(request: Request):
+    """List all Mem0 facts."""
+    limit = int(request.query_params.get("limit", 50))
+    facts = _mm.mem0.get_all(limit) if _mm else []
+    return {"facts": facts, "count": len(facts)}
+
+
+@app.get("/mem0/stats")
+async def mem0_stats():
+    """Mem0 statistics."""
+    stats = _mm.mem0.get_stats() if _mm else {}
+    return stats
+
+
+@app.get("/mem0/entities")
+async def mem0_entities():
+    """List entities."""
+    entities = _mm.mem0.get_entities() if _mm else []
+    return {"entities": entities, "count": len(entities)}
+
+
+@app.post("/mem0/add")
+async def mem0_add(request: Request):
+    """Add a fact to Mem0."""
+    body = await request.json()
+    fact_type = body.get("type", "fact")
+    content = body.get("content", "")
+    confidence = body.get("confidence", 1.0)
+    entities = body.get("entities", [])
+    fact = _mm.add_mem0_fact(fact_type, content,
+                             confidence=confidence, entities=entities)
+    return {"status": "added", "fact": fact.to_dict()}
+
+
+# ── Cognitive Runtime endpoints ─────────────────────────
+
+@app.post("/cognitive/start")
+async def cognitive_start(request: Request):
+    """Start a cognitive task."""
+    body = await request.json()
+    goal = body.get("goal", "")
+    plan_steps = body.get("plan", [])
+    space = body.get("space", "project")
+    _cr.start_task(goal, plan_steps, MemorySpace(space))
+    return {"status": "task_started", "state": _cr.get_state()}
+
+
+@app.post("/cognitive/resume")
+async def cognitive_resume():
+    """Resume a cognitive task."""
+    ok = _cr.resume_task()
+    return {
+        "status": "resumed" if ok else "no_state",
+        "state": _cr.get_state() if ok else None,
+    }
+
+
+@app.post("/cognitive/context")
+async def cognitive_context(request: Request):
+    """Build cognitive context."""
+    body = await request.json()
+    user_input = body.get("query", "")
+    budget = body.get("token_budget", 32000)
+    prompt, stats = _cr.build_context(user_input, token_budget=budget)
+    return {"prompt": prompt, "stats": stats, "state": _cr.get_state()}
+
+
+@app.post("/cognitive/step")
+async def cognitive_step(request: Request):
+    """Record a cognitive step."""
+    body = await request.json()
+    response = body.get("response", "")
+    tool_calls = body.get("tool_calls", [])
+    tool_outputs = body.get("tool_outputs", [])
+    user_input = body.get("user_input", "")
+    _cr.record_step(response, tool_calls, tool_outputs, user_input)
+    reflection = _cr.reflection_history[-1] if _cr.reflection_history else {}
+    return {"status": "recorded", "reflection": reflection, "state": _cr.get_state()}
+
+
+@app.post("/cognitive/reflect")
+async def cognitive_reflect(request: Request):
+    """Run reflection on a step."""
+    body = await request.json()
+    response = body.get("response", "")
+    tool_calls = body.get("tool_calls", [])
+    tool_outputs = body.get("tool_outputs", [])
+    reflection = _cr.reflect(response, tool_calls, tool_outputs)
+    return {"reflection": reflection}
+
+
+@app.post("/cognitive/strategy")
+async def cognitive_strategy():
+    """Adjust strategy."""
+    _cr.adjust_strategy()
+    return {"status": "adjusted", "state": _cr.get_state()}
+
+
+@app.get("/cognitive/state")
+async def cognitive_state_get():
+    """Get cognitive state (GET)."""
+    return _cr.get_state() if _cr else {}
+
+
+@app.post("/cognitive/state")
+async def cognitive_state_post():
+    """Get cognitive state (POST, backward compat)."""
+    return _cr.get_state() if _cr else {}
+
+
+@app.post("/cognitive/space")
+async def cognitive_space(request: Request):
+    """Set memory space."""
+    body = await request.json()
+    space = body.get("space", "project")
+    _cr.set_space(MemorySpace(space))
+    return {"status": "space_set", "space": space}
+
+
+# ── Error handler ───────────────────────────────────────
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """Global error handler with structured output."""
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error": str(exc),
+            "trace": traceback.format_exc(),
+        },
+    )
+
+
+# ── Entry point ─────────────────────────────────────────
+
+def run_server(data_dir: str = None, port: int = 8765, host: str = "127.0.0.1"):
+    """Run the FastAPI server with uvicorn."""
+    import uvicorn
+
+    global _data_dir, _port
+    _data_dir = data_dir or "/tmp/mm-server"
+    _port = port
+
+    logger.info("server_boot", host=host, port=port, version="0.2.0")
+
+    uvicorn.run(
+        "api.server:app",
+        host=host,
+        port=port,
+        log_level="info",
+        access_log=False,
+    )
+
+
+if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser(description="Kettu Mem v0.2.0")
+    parser.add_argument("--data-dir", default="/tmp/mm-server")
+    parser.add_argument("--port", type=int, default=8765)
+    parser.add_argument("--host", default="127.0.0.1")
+    args = parser.parse_args()
+    run_server(args.data_dir, args.port, args.host)

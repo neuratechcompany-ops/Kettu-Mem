@@ -1,0 +1,77 @@
+# Kettu Mem Configuration
+# v0.2.0
+
+# ── Paths ──────────────────────────────────────────────
+data_dir: "~/.openclaw/memory-store"
+
+# ── Server ─────────────────────────────────────────────
+host: "127.0.0.1"
+port: 8765
+workers: 1
+
+# ── Embeddings ─────────────────────────────────────────
+embedding_backend: "auto"           # auto, openai, sentence_transformers, random
+embedding_model: "text-embedding-3-small"
+embedding_dim: 1536
+embedding_batch_size: 100
+
+# ── Token Budget ───────────────────────────────────────
+token_budget_tight: 16000
+token_budget_normal: 32000
+token_budget_generous: 64000
+output_reserve_pct: 0.20
+
+# ── Context Assembly ───────────────────────────────────
+recent_events_limit_tight: 15
+recent_events_limit_normal: 30
+recent_events_limit_generous: 50
+max_semantic_chunks_tight: 5
+max_semantic_chunks_normal: 10
+max_semantic_chunks_generous: 15
+max_mem0_facts: 10
+max_summaries: 5
+
+# ── Compression ────────────────────────────────────────
+compression_threshold_pct: 0.70
+compression_min_events: 10
+
+# ── Mem0 ───────────────────────────────────────────────
+mem0_extract_batch_size: 10
+mem0_auto_extract: true
+mem0_confidence_threshold: 0.3
+
+# ── Ingestion ──────────────────────────────────────────
+ingest_min_content_length: 20
+ingest_max_content_length: 500
+ingest_dedup_enabled: true
+
+# ── Retrieval ──────────────────────────────────────────
+search_default_k: 10
+search_max_k: 100
+bm25_weight: 0.4
+faiss_weight_retrieval: 0.6
+
+# ── Memory Quality ─────────────────────────────────────
+ttl_days: 90
+decay_rate: 0.95
+importance_weight: 0.3
+recency_weight: 0.3
+confidence_weight: 0.2
+access_weight: 0.2
+
+# ── Security ───────────────────────────────────────────
+# api_key: "your-secret-key-here"  # leave empty to disable
+rate_limit_requests: 100
+rate_limit_window: 60
+
+# ── Logging ────────────────────────────────────────────
+log_level: "INFO"
+log_format: "json"
+
+# ── Session ────────────────────────────────────────────
+default_project_id: "default"
+max_sessions: 1000
+
+# ── Cognitive ──────────────────────────────────────────
+cognitive_max_steps: 500
+cognitive_reflection_window: 5

@@ -1,0 +1,70 @@
+[build-system]
+requires = ["setuptools>=75", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kettu-mem"
+version = "0.2.0"
+description = "Cognitive Memory Layer for OpenClaw AI agents"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "Aurum Kettunen (Nastya Guseva)", email = "aurum@kettu.dev"},
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.100",
+    "uvicorn[standard]>=0.23",
+    "pydantic>=2.0",
+    "pydantic-settings>=2.0",
+    "structlog>=24.0",
+    "prometheus-client>=0.19",
+    "psutil>=5.9",
+    "python-multipart>=0.0.9",
+    "numpy>=1.24",
+    "faiss-cpu>=1.7",
+    "tiktoken>=0.5",
+    "openai>=1.0",
+    "sentence-transformers>=2.2; extra == 'local'",
+]
+
+[project.optional-dependencies]
+local = ["sentence-transformers>=2.2"]
+dev = ["pytest>=8.0", "pytest-cov>=5.0", "ruff>=0.4", "black>=24.0"]
+all = ["kettu-mem[local,dev]"]
+
+[project.scripts]
+kettu-mem = "api.server:run_server"
+
+[project.urls]
+Homepage = "https://github.com/aurum/kettu-mem"
+Documentation = "https://github.com/aurum/kettu-mem/docs"
+Repository = "https://github.com/aurum/kettu-mem"
+
+[tool.setuptools.packages.find]
+include = ["api*", "memory*", "storage*", "retrieval*", "embeddings*", "extractors*", "evaluation*", "config*", "utils*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+
+[tool.black]
+line-length = 100
+target-version = ["py311", "py312"]
+
+[tool.pytest.ini_options]
+testpaths = ["src/tests"]
+python_files = "test_*.py"
