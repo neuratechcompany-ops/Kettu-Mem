@@ -43,7 +43,7 @@ class SessionEndRequest(BaseModel):
 
 
 class TurnBeforeRequest(BaseModel):
-    query: str = Field(default="", max_length=4096)
+    query: str = Field(..., min_length=1, max_length=4096)
     strategy: str = Field(default="normal", max_length=32)
     system_prompt: Optional[str] = Field(default=None, max_length=16384)
     tools: list[dict] = Field(default_factory=list)
@@ -78,7 +78,7 @@ class CognitiveStartRequest(BaseModel):
 
 
 class CognitiveContextRequest(BaseModel):
-    query: str = Field(default="", max_length=4096)
+    query: str = Field(..., min_length=1, max_length=4096)
     token_budget: int = Field(default=32000, ge=100, le=256000)
 
 
@@ -149,7 +149,7 @@ class APIKeyAuth:
 
     def __init__(self, api_key: str = None):
         self.api_key = api_key or _get_api_key()
-        self._enabled = bool(self.api_key)
+        self.api_key = None  # будет прочитан при первом запросе
 
 
 # ── Rate Limiter ────────────────────────────────────────
@@ -240,9 +240,11 @@ class SecurityMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next):
         # API key auth (unless public endpoint)
-        if self.api_key_auth._enabled and request.url.path not in PUBLIC_PATHS:
+        # Read API key at request time (not import time)
+        api_key = _get_api_key()
+        if api_key and request.url.path not in PUBLIC_PATHS:
             provided_key = request.headers.get("X-API-Key", "")
-            if not provided_key or provided_key != self.api_key_auth.api_key:
+            if not provided_key or provided_key != api_key:
                 return JSONResponse(
                     status_code=401,
                     content={"detail": "Invalid API key"},
