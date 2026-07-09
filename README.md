@@ -105,6 +105,6 @@ Kettu Mem/
 
 ## Владелец
 
-Aurum Kettunen (Настя Гусева)  
+Aurum Kettunen  
 Разработано: Hermes / Жорик  
 Дата: 2026-07-09

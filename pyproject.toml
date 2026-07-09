@@ -9,7 +9,7 @@ description = "Cognitive Memory Layer for OpenClaw AI agents"
 readme = "README.md"
 license = {text = "MIT"}
 authors = [
-    {name = "Aurum Kettunen (Nastya Guseva)", email = "aurum@kettu.dev"},
+    {name = "Aurum Kettunen", email = "aurum@veikkokettu.dev"},
 ]
 classifiers = [
     "Development Status :: 4 - Beta",

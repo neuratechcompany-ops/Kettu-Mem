@@ -3,7 +3,7 @@
 **Версия:** 0.1.0 «Cognitive Core»  
 **Дата:** 2026-07-09  
 **Автор:** Hermes / Жорик  
-**Владелец:** Aurum Kettunen (Настя Гусева)
+**Владелец:** Aurum Kettunen
 
 ---
 
@@ -222,7 +222,7 @@ SQLite 3.x (встроен в Python)
 ## 8. Контакты и лицензия
 
 - **Продукт:** Kettu Mem v0.1.0
-- **Владелец:** Aurum Kettunen (Настя Гусева)
+- **Владелец:** Aurum Kettunen
 - **Разработчик:** Hermes / Жорик
 - **Статус:** Development Complete, Integration Complete, Hardening Complete, Fault Tolerance Verified
-- **Лицензия:** Proprietary (Настя Гусева)
+- **Лицензия:** Proprietary (Aurum Kettunen)
