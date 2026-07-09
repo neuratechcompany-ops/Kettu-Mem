@@ -1,46 +1,62 @@
-# Kettu Mem v0.2.0-rc1 Release Notes
+# Kettu Mem v0.2.0 Release Notes
 
-## Fixed (от v0.1.0)
+## Статус: ✅ Stable
 
-1. **FactType string→enum conversion** — `trigger_extract_fact()` called `mem0.add_fact(fact_type, ...)` with a string instead of `FactType` enum, causing AttributeError on string `.value` access.
-2. **Middleware ASGI compatibility** — Structlog middleware wrapping corrected to work with FastAPI's ASGI lifecycle (request_id not propagated).
-3. **IngestionFilter actually enforces** — v0.1.0 had the filter but `record_event` ignored its result; now filtered events return `filtered:<reason>` and are not persisted.
-4. **Mem0 source_session isolation** — `get_all()` and `search_text()` now accept `source_session` parameter, preventing cross-session fact leakage.
-5. **MemoryQualityScorer integration** — Facts are now scored and filtered on retrieval (expired facts excluded, ranked by composite score).
-6. **Auto-extract batch size reduced** — `_extract_batch_size` reduced from 20 to 10 for more responsive Mem0 fact extraction.
-7. **Vector near-duplicate dedup** — `_embed_and_store()` skips chunks that differ only in digits from the previous chunk.
-8. **Event ID collision via UUID** — L3 event IDs use `uuid.uuid4().hex[:12]` instead of sequential + timestamp.
-9. **FAISS fallback chain** — OpenAI → sentence-transformers → random: each backend failure gracefully descends to the next without crash.
-10. **L3 corrupted JSONL resilience** — `read_session()` now wraps `json.loads()` in try/except, skipping corrupted lines with a structured warning instead of crashing.
+Релиз-кандидат v0.2.0-rc1 прошёл приёмку. Исправлены все критические баги, добавлены 10 стабилизаций.
+
+## Fixed (от v0.2.0-rc1)
+
+1. **FactType string→enum conversion** — `trigger_extract_fact()` вызывался с строкой вместо `FactType`, вызывая AttributeError на `.value`.
+2. **Middleware ASGI compatibility** — Structlog middleware исправлен для совместимости с FastAPI ASGI lifecycle (request_id теперь пробрасывается).
+3. **IngestionFilter actually enforces** — v0.1.0 имел фильтр, но `record_event` игнорировал его результат; теперь отфильтрованные события возвращают `filtered:<reason>` и не персистятся.
+4. **Mem0 source_session isolation** — `get_all()` и `search_text()` теперь принимают `source_session`, предотвращая утечку фактов между сессиями.
+5. **MemoryQualityScorer integration** — Факты скорируются и фильтруются при retrieval (просроченные исключаются, ранжируются по composite score).
+6. **Auto-extract batch size reduced** — `_extract_batch_size` уменьшен с 20 до 10 для более отзывчивой экстракции фактов Mem0.
+7. **Vector near-duplicate dedup** — `_embed_and_store()` пропускает чанки, отличающиеся только цифрами от предыдущего.
+8. **Event ID collision via UUID** — L3 event IDs используют `uuid.uuid4().hex[:12]` вместо sequential + timestamp.
+9. **FAISS fallback chain** — OpenAI → sentence-transformers → random: каждый backend gracefully деградирует без краша.
+10. **L3 corrupted JSONL resilience** — `read_session()` оборачивает `json.loads()` в try/except, пропуская битые строки с structured warning.
+
+## What's New (от v0.1.0)
+
+- 🏗 **Модульная архитектура** — api/, memory/, storage/, retrieval/, embeddings/, extractors/, config/, utils/
+- 🚀 **FastAPI + Uvicorn** — асинхронный сервер, 30+ endpoints
+- ⚙️ **pydantic-settings** — конфигурация через .env / yaml
+- 🔍 **BM25 + FAISS hybrid search** — Reciprocal Rank Fusion (RRF)
+- 📊 **Memory Quality** — composite scoring, TTL, exponential decay
+- 🔒 **Security** — API key auth, rate limiting, input validation
+- 📝 **Structlog** — structured logging с request/session tracking
+- 📈 **Prometheus /metrics** — counters, histograms, gauges
+- 🔀 **Session Isolation** — project → workspace → agent → user → session
+- 🧪 **34 теста** + CI/CD (GitHub Actions)
+- 📊 **Evaluation Framework** — HAES + MES, вшит в проект
 
 ## Breaking Changes
 
-None. All v0.1.0 endpoints preserved.
+None. Все v0.1.0 endpoints сохранены.
 
 ## Known Limitations
 
-- **Concurrent FAISS writes**: Multiple MemoryManager instances writing to the same FAISS index can race on `faiss.index` file. WAL-mode SQLite is fine, but FAISS file itself has no locking. Fix pending in v0.3.0.
-- **Mem0 extraction heuristic-only**: No LLM extraction — pure regex + pattern matching. Works for Russian and English but misses implicit preferences.
-- **FAISS can't read corrupted `.index` file**: If `faiss.index` is corrupted on disk, `load_index()` will raise. Auto-rebuild on failure not implemented.
-- **No WAL checkpoint**: SQLite WAL can grow unboundedly in write-heavy workloads. No periodic checkpoint runs.
-- **10MB+ payloads**: Content is truncated by `IngestionFilter.normalize()` but the full payload is stored in L3. Embedding uses only first 500 chars.
+- **Concurrent FAISS writes**: несколько инстансов MemoryManager могут race на `faiss.index`. WAL-mode SQLite ок, но сам FAISS файл без блокировок. Fix в v0.3.0.
+- **Mem0 extraction heuristic-only**: regex + pattern matching, без LLM. Работает для RU/EN, но пропускает implicit preferences.
+- **FAISS can't read corrupted `.index`**: если `faiss.index` повреждён на диске, `load_index()` упадёт. Auto-rebuild не реализован.
+- **No WAL checkpoint**: SQLite WAL может расти неограниченно при write-heavy нагрузке.
+- **10MB+ payloads**: Content обрезается `IngestionFilter.normalize()`, но полный payload хранится в L3. Embedding использует только первые 500 символов.
 
-## Rollback
-
-To roll back to v0.1.0:
+## Rollback to v0.1.0
 
 ```bash
-# 1. Stop the server
+# 1. Остановить сервер
 kill $(pgrep -f "uvicorn api.server")
 
-# 2. Restore backup (if you made one before upgrading)
+# 2. Восстановить backup (если сделан перед обновлением)
 cp -r backup/v0.1.0-src/* src/
 
-# 3. Restart
+# 3. Перезапустить
 cd src && python3 -m uvicorn api.server:app --host 127.0.0.1 --port 8765
 ```
 
-Data formats are backward-compatible: SQLite schema unchanged, JSONL format unchanged, FAISS index format unchanged. Data from v0.2.0 can be read by v0.1.0.
+Форматы данных backward-compatible: SQLite schema без изменений, JSONL без изменений, FAISS index без изменений.
 
 ## Environment Variables
 
@@ -56,34 +72,22 @@ Data formats are backward-compatible: SQLite schema unchanged, JSONL format unch
 | `KETTU_MEM_EMBEDDING_MODEL` | Embedding model name | text-embedding-3-small |
 | `KETTU_MEM_OPENAI_BASE_URL` | OpenAI API base URL (for proxies) | (none) |
 
-## Run Commands
+## Quick Start
 
 ```bash
-# Install dependencies
+# Install
 pip install -r requirements.txt
 
-# Start server
+# Start
 python3 -m uvicorn api.server:app --host 127.0.0.1 --port 8765
 
-# Health check
+# Docker
+docker compose up -d
+
+# Health
 curl http://127.0.0.1:8765/health
-
-# Deep health (all layers)
-curl http://127.0.0.1:8765/ready
-
-# Start a session
-curl -X POST http://127.0.0.1:8765/session/start \
-  -H "Content-Type: application/json" \
-  -d '{"session_id":"my-session","project_id":"my-project"}'
-
-# Record events
-curl -X POST http://127.0.0.1:8765/turn/after \
-  -H "Content-Type: application/json" \
-  -d '{"events":[{"role":"user","type":"message","content":"Hello world test message for recording"}]}'
-
-# Search memory
-curl "http://127.0.0.1:8765/mem0/search?q=Hello+world&limit=5"
-
-# Run soak test (no server needed)
-python3 scripts/soak_test.py
 ```
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for full version history.

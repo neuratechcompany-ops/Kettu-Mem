@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.2.0] — 2026-07-09
+## [0.2.0] — 2026-07-09 (Stable)
 
 ### 🏗 Architecture
 - Modular package structure: api/, memory/, storage/, retrieval/, embeddings/, extractors/, config/, utils/
@@ -60,6 +60,16 @@
 - 34 pytest tests covering all layers
 - Coverage: L3 96%, SQLite 89%, Context Builder 75%
 - CI/CD pipeline (GitHub Actions): lint, test, build, smoke
+- Acceptance tests: Single Task (25 steps), Long Task (300 steps), Similar Tasks (3×)
+
+### 📊 Evaluation (вшит в проект)
+- HAES (Hermes Agent Evaluation Score) — composite метрика 0-100
+- MES (Memory Evaluation Score) — оценка слоя памяти
+- EvalStore — персистентное хранилище прогонов
+- Benchmarking — сохранение и сравнение HAES-бенчмарков
+- TelemetryCollector — сбор метрик на каждом шаге агента
+- MetricsEngine — агрегация и расчёт производных метрик
+- Встроенные acceptance-тесты через eval framework
 
 ### 📦 Release
 - pyproject.toml with proper metadata
@@ -67,9 +77,26 @@
 - docker-compose.yml with healthchecks
 - CHANGELOG.md
 
-### 🐛 Fixes
-- Fixed FactType conversion in trigger_extract_fact (string → enum)
-- Fixed middleware ASGI compatibility
+### 🐛 Fixes (10 стабилизаций)
+1. **FactType string→enum** — trigger_extract_fact() теперь принимает строку и конвертирует в FactType enum
+2. **Middleware ASGI** — structlog middleware совместим с FastAPI ASGI lifecycle
+3. **IngestionFilter enforcement** — record_event больше не игнорирует результат фильтра
+4. **Mem0 source_session isolation** — get_all() и search_text() изолируют факты по сессиям
+5. **MemoryQualityScorer integration** — факты скорируются и фильтруются при retrieval
+6. **Auto-extract batch size** — уменьшен с 20 до 10 для более отзывчивого extraction
+7. **Vector near-duplicate dedup** — чанки, отличающиеся только цифрами, пропускаются
+8. **Event ID collision via UUID** — L3 ID используют uuid4 вместо sequential
+9. **FAISS fallback chain** — OpenAI → sentence-transformers → random с graceful degradation
+10. **L3 corrupted JSONL resilience** — read_session() пропускает битые строки с предупреждением
+
+### ⚠️ Known Limitations (будут исправлены в v0.3.0)
+- Concurrent FAISS writes могут race на faiss.index файле
+- Mem0 extraction — heuristic-only (regex), без LLM
+- FAISS не может прочитать повреждённый .index файл
+- SQLite WAL может расти без периодического checkpoint
+- 10MB+ payloads — embedding использует только первые 500 символов
+
+---
 
 ## [0.1.0] — 2026-07-09
 ### Initial Release

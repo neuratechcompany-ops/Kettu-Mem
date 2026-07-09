@@ -1,0 +1,24 @@
+# Kettu Mem v0.2.0 — Core Dependencies
+# Install: pip install -r requirements.txt
+
+fastapi>=0.100
+uvicorn[standard]>=0.23
+pydantic>=2.0
+pydantic-settings>=2.0
+structlog>=24.0
+prometheus-client>=0.19
+psutil>=5.9
+python-multipart>=0.0.9
+numpy>=1.24
+faiss-cpu>=1.7
+tiktoken>=0.5
+openai>=1.0
+
+# Optional: local embeddings (uncomment to enable)
+# sentence-transformers>=2.2
+
+# Optional: development tools (uncomment to enable)
+# pytest>=8.0
+# pytest-cov>=5.0
+# ruff>=0.4
+# black>=24.0
