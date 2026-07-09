@@ -58,9 +58,16 @@ from extractors.cognitive_runtime import CognitiveRuntime, MemorySpace, StepOutc
 from api.security import (
     add_security_middleware,
     SessionStartRequest,
+    SessionEndRequest,
     TurnBeforeRequest,
     TurnAfterRequest,
+    CompressRequest,
     Mem0AddRequest,
+    CognitiveStartRequest,
+    CognitiveContextRequest,
+    CognitiveStepRequest,
+    CognitiveReflectRequest,
+    CognitiveSpaceRequest,
 )
 from utils.logging import add_logging_middleware, setup_logging
 from config import settings
@@ -299,16 +306,14 @@ async def session_start(body: SessionStartRequest):
 
 
 @app.post("/session/end")
-async def session_end(request: Request):
+async def session_end(body: SessionEndRequest):
     """Finalize a session."""
-    body = await request.json()
-    reason = body.get("reason", "manual")
-    if body.get("extract_facts", True):
+    if body.extract_facts:
         _mm.extract_all_facts()
     stats = _mm.get_archive_stats()
     return {
         "status": "ended",
-        "reason": reason,
+        "reason": body.reason,
         "stats": stats,
     }
 
@@ -373,11 +378,9 @@ async def turn_after(body: TurnAfterRequest):
 # ── Compression ─────────────────────────────────────────
 
 @app.post("/compress")
-async def compress(request: Request):
+async def compress(body: CompressRequest):
     """Manual compression."""
-    body = await request.json()
-    end_step = body.get("end_step")
-    result = _mm.compress(end_step=end_step)
+    result = _mm.compress(end_step=body.end_step)
     return {"status": "compressed", "result": result}
 
 
@@ -446,13 +449,9 @@ async def mem0_add(body: Mem0AddRequest):
 # ── Cognitive Runtime endpoints ─────────────────────────
 
 @app.post("/cognitive/start")
-async def cognitive_start(request: Request):
+async def cognitive_start(body: CognitiveStartRequest):
     """Start a cognitive task."""
-    body = await request.json()
-    goal = body.get("goal", "")
-    plan_steps = body.get("plan", [])
-    space = body.get("space", "project")
-    _cr.start_task(goal, plan_steps, MemorySpace(space))
+    _cr.start_task(body.goal, body.plan, MemorySpace(body.space))
     return {"status": "task_started", "state": _cr.get_state()}
 
 
@@ -467,36 +466,24 @@ async def cognitive_resume():
 
 
 @app.post("/cognitive/context")
-async def cognitive_context(request: Request):
+async def cognitive_context(body: CognitiveContextRequest):
     """Build cognitive context."""
-    body = await request.json()
-    user_input = body.get("query", "")
-    budget = body.get("token_budget", 32000)
-    prompt, stats = _cr.build_context(user_input, token_budget=budget)
+    prompt, stats = _cr.build_context(body.query, token_budget=body.token_budget)
     return {"prompt": prompt, "stats": stats, "state": _cr.get_state()}
 
 
 @app.post("/cognitive/step")
-async def cognitive_step(request: Request):
+async def cognitive_step(body: CognitiveStepRequest):
     """Record a cognitive step."""
-    body = await request.json()
-    response = body.get("response", "")
-    tool_calls = body.get("tool_calls", [])
-    tool_outputs = body.get("tool_outputs", [])
-    user_input = body.get("user_input", "")
-    _cr.record_step(response, tool_calls, tool_outputs, user_input)
+    _cr.record_step(body.response, body.tool_calls, body.tool_outputs, body.user_input)
     reflection = _cr.reflection_history[-1] if _cr.reflection_history else {}
     return {"status": "recorded", "reflection": reflection, "state": _cr.get_state()}
 
 
 @app.post("/cognitive/reflect")
-async def cognitive_reflect(request: Request):
+async def cognitive_reflect(body: CognitiveReflectRequest):
     """Run reflection on a step."""
-    body = await request.json()
-    response = body.get("response", "")
-    tool_calls = body.get("tool_calls", [])
-    tool_outputs = body.get("tool_outputs", [])
-    reflection = _cr.reflect(response, tool_calls, tool_outputs)
+    reflection = _cr.reflect(body.response, body.tool_calls, body.tool_outputs)
     return {"reflection": reflection}
 
 
@@ -520,12 +507,10 @@ async def cognitive_state_post():
 
 
 @app.post("/cognitive/space")
-async def cognitive_space(request: Request):
+async def cognitive_space(body: CognitiveSpaceRequest):
     """Set memory space."""
-    body = await request.json()
-    space = body.get("space", "project")
-    _cr.set_space(MemorySpace(space))
-    return {"status": "space_set", "space": space}
+    _cr.set_space(MemorySpace(body.space))
+    return {"status": "space_set", "space": body.space}
 
 
 # ── Error handler ───────────────────────────────────────

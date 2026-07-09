@@ -235,3 +235,79 @@ class TestInputSanitizer:
     def test_none_passes(self):
         from api.security import InputSanitizer
         assert InputSanitizer.sanitize(None) is None
+
+
+class Test422ValidationErrors:
+    """Test that all Pydantic-protected POST endpoints return 422 on invalid input."""
+
+    @pytest.fixture
+    def client(self, temp_dir):
+        from fastapi.testclient import TestClient
+        import api.server as server_module
+
+        server_module._data_dir = temp_dir
+        server_module._mm = None
+        server_module._cr = None
+
+        with TestClient(server_module.app, raise_server_exceptions=False) as tc:
+            yield tc
+
+        if server_module._mm:
+            try:
+                server_module._mm.close()
+            except Exception:
+                pass
+            server_module._mm = None
+        server_module._cr = None
+        server_module._data_dir = ""
+
+    def test_session_end_422_wrong_type(self, client):
+        """SessionEndRequest: reason must be str, extract_facts must be bool."""
+        resp = client.post("/session/end", json={"reason": 42, "extract_facts": "not_a_bool"})
+        assert resp.status_code == 422, f"Expected 422, got {resp.status_code}"
+
+    def test_compress_422_invalid_end_step(self, client):
+        """CompressRequest: end_step must be int or None, not a string."""
+        resp = client.post("/compress", json={"end_step": "not_a_number"})
+        assert resp.status_code == 422, f"Expected 422, got {resp.status_code}"
+
+    def test_cognitive_start_422_plan_not_list(self, client):
+        """CognitiveStartRequest: plan must be a list of strings."""
+        resp = client.post("/cognitive/start", json={
+            "goal": "test",
+            "plan": "not_a_list",
+            "space": "project"
+        })
+        assert resp.status_code == 422, f"Expected 422, got {resp.status_code}"
+
+    def test_cognitive_context_422_token_budget_string(self, client):
+        """CognitiveContextRequest: token_budget must be int."""
+        resp = client.post("/cognitive/context", json={
+            "query": "test",
+            "token_budget": "not_an_int"
+        })
+        assert resp.status_code == 422, f"Expected 422, got {resp.status_code}"
+
+    def test_cognitive_step_422_tool_calls_not_list(self, client):
+        """CognitiveStepRequest: tool_calls must be a list of dicts."""
+        resp = client.post("/cognitive/step", json={
+            "response": "some response",
+            "tool_calls": "not_a_list",
+            "tool_outputs": [],
+            "user_input": ""
+        })
+        assert resp.status_code == 422, f"Expected 422, got {resp.status_code}"
+
+    def test_cognitive_reflect_422_tool_outputs_not_list(self, client):
+        """CognitiveReflectRequest: tool_outputs must be a list of dicts."""
+        resp = client.post("/cognitive/reflect", json={
+            "response": "some reflection",
+            "tool_calls": [],
+            "tool_outputs": "not_a_list"
+        })
+        assert resp.status_code == 422, f"Expected 422, got {resp.status_code}"
+
+    def test_cognitive_space_422_space_not_str(self, client):
+        """CognitiveSpaceRequest: space must be a string."""
+        resp = client.post("/cognitive/space", json={"space": 12345})
+        assert resp.status_code == 422, f"Expected 422, got {resp.status_code}"

@@ -89,6 +89,12 @@ class CognitiveStepRequest(BaseModel):
     user_input: str = Field(default="", max_length=4096)
 
 
+class CognitiveReflectRequest(BaseModel):
+    response: str = Field(default="", max_length=16384)
+    tool_calls: list[dict] = Field(default_factory=list)
+    tool_outputs: list[dict] = Field(default_factory=list)
+
+
 class CognitiveSpaceRequest(BaseModel):
     space: str = Field(default="project", max_length=32)
 
