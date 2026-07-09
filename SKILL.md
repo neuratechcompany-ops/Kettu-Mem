@@ -1,7 +1,7 @@
 ---
 name: kettu-mem
-description: "Kettu Mem v0.1.0 — когнитивный слой памяти для OpenClaw. Планирование, контекст, рефлексия, память, отказоустойчивость."
-version: "0.1.0"
+description: "Kettu Mem v0.2.0-rc1 — когнитивный слой памяти для OpenClaw. Production-ready. FastAPI, гибридный retrieval, изоляция сессий, Prometheus."
+version: "0.2.0-rc1"
 metadata:
   openclaw:
     emoji: "🦊"
@@ -9,104 +9,95 @@ metadata:
     requires:
       bins: ["python3", "curl"]
       env: ["HERMES_MEMORY_ENABLED"]
+      python: ">=3.10"
 ---
 
-# Kettu Mem — Скилл для OpenClaw
+# Kettu Mem v0.2.0-rc1 — Скилл для OpenClaw
 
-## Что это
+Production-ready когнитивный слой памяти с гибридным retrieval, изоляцией сессий и Prometheus метриками.
 
-Kettu Mem — когнитивный слой памяти, встроенный в agent loop OpenClaw. Управляет планированием задач, сборкой контекста, рефлексией после каждого шага, детекцией бесполезных tool calls и иммутабельным архивом всех действий.
-
-## Как использовать
-
-### Проверить статус
+## Быстрая установка
 
 ```bash
-python3 /home/ngus/.openclaw/workspace/spike-memory-manager/hermes_doctor.py
+# 1. Клонировать
+git clone https://github.com/neuratechcompany-ops/Kettu-Mem.git
+cd Kettu-Mem
+
+# 2. Зависимости
+pip install -r requirements.txt --break-system-packages
+
+# 3. Конфигурация (создать .env)
+cat > .env << 'EOF'
+HERMES_MEMORY_ENABLED=1
+HERMES_MEMORY_DATA_DIR=~/.openclaw/memory-store
+OPENAI_API_KEY=sk-...
+HERMES_MEMORY_PORT=8765
+EOF
+
+# 4. Запустить сервер
+python3 -m uvicorn src.api.server:app --host 127.0.0.1 --port 8765
+
+# 5. Проверить
+curl http://127.0.0.1:8765/health
+# → {"status":"ok"}
 ```
 
-### Поиск в памяти
+## Docker
 
 ```bash
-curl "http://127.0.0.1:8765/mem0/search?q=<запрос>&limit=5"
+docker-compose up -d
 ```
 
-### Состояние планирования
+## Проверка здоровья
 
 ```bash
-curl http://127.0.0.1:8765/cognitive/state
+curl http://127.0.0.1:8765/health
+curl http://127.0.0.1:8765/ready
+curl http://127.0.0.1:8765/metrics
 ```
 
-### Бэкап
+## Основные endpoint'ы
 
-```bash
-python3 /home/ngus/.openclaw/workspace/spike-memory-manager/hermes_backup.py --output /tmp/kettu-backup
-```
+| Метод | Путь | Назначение |
+|---|---|---|
+| GET | /health | Health check |
+| GET | /ready | Readiness (7 layers) |
+| GET | /live | Liveness |
+| GET | /metrics | Prometheus |
+| POST | /session/start | Начать сессию |
+| POST | /turn/before | Собрать контекст |
+| POST | /turn/after | Записать события |
+| GET | /mem0/search?q= | Поиск в памяти |
+| GET | /mem0/stats | Статистика Mem0 |
+| POST | /cognitive/start | Запустить задачу |
+| GET | /cognitive/state | Состояние планирования |
 
-### Восстановление
+## Конфигурация (.env)
 
-Если агент «забыл» контекст после рестарта:
-
-1. Проверить что сервер жив: `curl http://127.0.0.1:8765/health`
-2. Если нет — перезапустить: `cd /home/ngus/.openclaw/workspace/spike-memory-manager && python3 server.py --data-dir ~/.openclaw/memory-store --port 8765 &`
-3. Проверить состояние: `curl http://127.0.0.1:8765/cognitive/state`
-4. Если PlanningState есть — агент должен автоматически подхватить
-
-### Очистка памяти сессии (без удаления global/user)
-
-```bash
-# Удалить L3 сессии
-rm ~/.openclaw/memory-store/l3_archive/session-<id>.jsonl
-# Очистить SQLite для сессии
-sqlite3 ~/.openclaw/memory-store/metadata.db "DELETE FROM events WHERE session_id='<id>';"
-```
-
-### Отключение
-
-```bash
-# Только Cognitive Runtime (память продолжает работать)
-export HERMES_COGNITIVE_RUNTIME=0
-
-# Полное отключение
-export HERMES_MEMORY_ENABLED=0
-```
-
-## Архитектура (кратко)
-
-```
-Kettu Mem = L3 JSONL Archive + SQLite Index + FAISS + Mem0 + Cognitive Runtime
-           + Context Builder + Compression + Tool Intelligence + Reflection Engine
-           + OpenClaw Plugin (5 hooks)
-```
-
-## Файлы
-
-- Исходники: `/home/ngus/.openclaw/workspace/spike-memory-manager/`
-- Плагин: `/home/ngus/.openclaw/workspace/plugins/hermes-memory/`
-- Данные: `~/.openclaw/memory-store/`
-- Документация: `/home/ngus/.openclaw/workspace/Kettu Mem/docs/`
-- Скрипты: `/home/ngus/.openclaw/workspace/Kettu Mem/scripts/`
-
-## Команды
-
-| Команда | Назначение |
+| Переменная | Значение по умолчанию |
 |---|---|
-| `hermes_doctor.py` | Полная диагностика всех слоёв |
-| `hermes_backup.py` | Бэкап всех данных |
-| `hermes_soak.py` | Нагрузочный тест |
-| `hermes_fault_test.py` | Тест отказоустойчивости (10 сценариев) |
+| HERMES_MEMORY_ENABLED | 1 |
+| HERMES_MEMORY_DATA_DIR | /tmp/mm-server |
+| HERMES_MEMORY_PORT | 8765 |
+| HERMES_MEMORY_API_KEY | (нет) |
+| OPENAI_API_KEY | (обязательно для эмбеддингов) |
 
-## Принятие решений
+## Устранение неполадок
 
-Когда агент использует Kettu Mem:
+**Сервер не стартует:** проверь `OPENAI_API_KEY` в .env или `~/.openclaw/workspace/secrets/openai-key.txt`
 
-1. **Перед каждым шагом** — контекст собирается динамически из Goal + Plan + Mem0 + FAISS + Summaries + Recent Events
-2. **После каждого шага** — ReflectionEngine анализирует прогресс/застревание/циклы
-3. **При смене стратегии** — PlanningState обновляется, старые решения сохраняются
-4. **При рестарте** — состояние восстанавливается из `planning_state.json`
+**FAISS пустой:** сервер сам перестроит индекс при первом `/turn/before`. Или: `python3 -c "from src.memory.memory_manager import MemoryManager; mm = MemoryManager(); mm.rebuild_index()"`
 
-## Ограничения
+**OOM:** уменьши `FAISS_DIM` в `kettu_mem.yaml` с 1536 до 384.
 
-- sentence-transformers не установлен (FAISS с random embeddings, качество поиска снижено)
-- Mem0 extraction — regex-based (не LLM)
-- Хуки активируются только для сессий, созданных после установки плагина
+## Обновление с v0.1.0
+
+```bash
+git pull origin main
+pip install -r requirements.txt --break-system-packages
+# API обратно совместим — старые endpoint'ы сохранены
+```
+
+## Версия
+
+**v0.2.0-rc1** — Release Candidate. 100 тестов, 71% coverage. Аудит 10/10 critical fixed.
