@@ -1,6 +1,6 @@
 # Kettu Mem — Evaluation Framework Specification
 
-**Версия:** 0.1.0 «Measurement First»  
+**Версия:** 0.2.0 «Production Release»  
 **Дата:** 2026-07-09  
 **Продукт:** Kettu Mem (Hermes MemoryManager + Cognitive Runtime)  
 **Фреймворк:** Evaluation Framework v1  

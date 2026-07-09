@@ -39,9 +39,33 @@ None. Все v0.1.0 endpoints сохранены.
 
 - **Concurrent FAISS writes**: несколько инстансов MemoryManager могут race на `faiss.index`. WAL-mode SQLite ок, но сам FAISS файл без блокировок. Fix в v0.3.0.
 - **Mem0 extraction heuristic-only**: regex + pattern matching, без LLM. Работает для RU/EN, но пропускает implicit preferences.
-- **FAISS can't read corrupted `.index`**: если `faiss.index` повреждён на диске, `load_index()` упадёт. Auto-rebuild не реализован.
-- **No WAL checkpoint**: SQLite WAL может расти неограниченно при write-heavy нагрузке.
 - **10MB+ payloads**: Content обрезается `IngestionFilter.normalize()`, но полный payload хранится в L3. Embedding использует только первые 500 символов.
+
+## v0.2.0 Production Hardening
+
+### FAISS Atomic Write
+- `build_index()` и `add_vectors()` теперь пишут во временный файл → `fsync` → атомарный `os.replace()`. Защита от битого индекса при обрыве записи.
+
+### Auto-Rebuild FAISS
+- `start_session()` автоматически проверяет здоровье FAISS индекса через `is_index_healthy()`. Если индекс битый/отсутствует, но есть данные в SQLite `vector_map` — перестраивает из сохранённых чанков.
+- Лог: `faiss_index_corrupted_auto_rebuilding` с количеством восстанавливаемых чанков.
+
+### L3 Hard Payload Cap (100 KB)
+- `L3VerbatimArchive`: максимальный размер события — 100 KB. Всё что больше сохраняется в artifact store (`_artifacts/`), в JSONL пишется ссылка `{"artifact_ref": "..."}`.
+- `read_session()` автоматически подгружает артефакты при чтении.
+
+### WAL Checkpoint Policy
+- `SQLiteMetadataIndex`: автоматический `PRAGMA wal_checkpoint(PASSIVE)` каждые 1000 записей или 60 секунд. Предотвращает неограниченный рост WAL-файла.
+
+### Production Benchmark Suite
+- `scripts/benchmark_production.py`: 1 агент (ingest+retrieval), 10 concurrent агентов (изоляция), 100 сессий (create/switch overhead), restart recovery.
+- Результаты в `BENCHMARKS.md`.
+
+### Лицензия
+- Единая лицензия MIT для всего проекта. Добавлен файл `LICENSE`.
+
+### Версии
+- Все файлы синхронизированы на v0.2.0: `src/VERSION.json`, `VERSION.json` (root), `pyproject.toml`, `package.json`, `SKILL.md`, `README.md`, `CHANGELOG.md`, все docs.
 
 ## Rollback to v0.1.0
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Kettu Mem v0.2.0-rc1 — Comprehensive Release Soak Test.
+Kettu Mem v0.2.0 — Comprehensive Release Soak Test.
 
 Tests:
   1. 1000+ events with 10+ sessions, 3+ projects
@@ -614,7 +614,7 @@ def test_ttl_expiry():
 # ═══════════════════════════════════════════════════════════
 if __name__ == "__main__":
     print("╔══════════════════════════════════════════╗")
-    print("║  Kettu Mem v0.2.0-rc1 Release Soak Test ║")
+    print("║  Kettu Mem v0.2.0 Release Soak Test ║")
     print("╚══════════════════════════════════════════╝", flush=True)
 
     all_pass = True

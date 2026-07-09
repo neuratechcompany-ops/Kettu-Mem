@@ -1,6 +1,6 @@
 # Hermes MemoryManager — Runbook
 
-Версия: **0.1.0** (Cognitive Core) • 2026-07-09
+Версия: **0.2.0** (Production Release) • 2026-07-09
 
 ## Быстрый старт
 

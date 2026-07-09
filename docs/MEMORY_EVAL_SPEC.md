@@ -1,6 +1,6 @@
 # Kettu Mem — Memory Evaluation Framework Specification
 
-**Версия:** 0.1.0 «Memory First»  
+**Версия:** 0.2.0 «Production Release»  
 **Дата:** 2026-07-09  
 **Продукт:** Kettu Mem (Hermes MemoryManager)  
 

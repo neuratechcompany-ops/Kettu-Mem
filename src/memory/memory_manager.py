@@ -107,6 +107,15 @@ class MemoryManager:
         faiss_ids = self.sqlite.get_faiss_ids_for_session(session_id)
         self._next_faiss_id = max(v["faiss_id"] for v in faiss_ids) + 1 if faiss_ids else 0
 
+        # Auto-rebuild FAISS if index is corrupted or missing but we have data
+        if not self.faiss.is_index_healthy():
+            count_in_sqlite = len(faiss_ids)
+            if count_in_sqlite > 0:
+                logger.warning("faiss_index_corrupted_auto_rebuilding",
+                               chunks_in_sqlite=count_in_sqlite,
+                               session_id=session_id)
+                self._auto_rebuild_faiss(session_id, faiss_ids)
+
         mem0_stats = self.mem0.get_stats()
         arc_count = self.l3.get_event_count(session_id)
 
@@ -388,6 +397,43 @@ class MemoryManager:
                         tokens_saved=result.tokens_saved)
 
     # ── Manual operations ───────────────────────────────
+
+    def _auto_rebuild_faiss(self, session_id: str, faiss_ids: list[dict]):
+        """
+        Auto-rebuild FAISS index from SQLite vector_map + L3 data.
+        Called when index is corrupted or missing at session start.
+        """
+        texts = []
+        ids_out = []
+
+        for entry in faiss_ids:
+            chunk = entry.get("chunk_text", "")
+            if not chunk or len(chunk) <= 20:
+                continue
+            # Dedup by normalized text
+            import re
+            norm = re.sub(r'\d+', '#', chunk)
+            if texts:
+                last_norm = re.sub(r'\d+', '#', texts[-1])
+                if last_norm == norm:
+                    continue
+            faiss_id = len(texts)
+            texts.append(chunk)
+            ids_out.append(faiss_id)
+
+        if not texts:
+            logger.warning("faiss_auto_rebuild_no_chunks", session_id=session_id)
+            return
+
+        t0 = time.time()
+        self.faiss.build_index(texts, ids_out)
+        elapsed = (time.time() - t0) * 1000
+
+        self._next_faiss_id = len(texts)
+        logger.info("faiss_auto_rebuild_complete",
+                    chunks=len(texts),
+                    from_sqlite=True,
+                    latency_ms=round(elapsed, 0))
 
     def rebuild_index(self, session_id: str = None):
         """

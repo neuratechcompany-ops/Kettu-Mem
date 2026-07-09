@@ -9,6 +9,10 @@ Tables:
 - vector_map: vec_id, event_id, session_id, faiss_id, chunk_text, created_at
 
 Indexes on: session_id, project_id, type, timestamp, role.
+
+WAL checkpoint policy:
+- Automatic PASSIVE checkpoint every CHECKPOINT_INTERVAL writes or
+  CHECKPOINT_TIME seconds to prevent unbounded WAL growth.
 """
 import json
 import hashlib
@@ -16,6 +20,10 @@ import sqlite3
 import time
 import uuid
 from pathlib import Path
+
+# WAL checkpoint throttling
+CHECKPOINT_INTERVAL = 1000  # writes between checkpoints
+CHECKPOINT_TIME = 60        # seconds between checkpoints
 
 
 class SQLiteMetadataIndex:
@@ -27,6 +35,8 @@ class SQLiteMetadataIndex:
         self.conn.row_factory = sqlite3.Row
         self.conn.execute("PRAGMA journal_mode=WAL")
         self.conn.execute("PRAGMA synchronous=NORMAL")
+        self._write_count = 0
+        self._last_checkpoint = time.time()
         self._create_tables()
 
     def _create_tables(self):
@@ -108,6 +118,7 @@ class SQLiteMetadataIndex:
             (session_id, project_id, workspace, agent, user_id, time.time())
         )
         self.conn.commit()
+        self._maybe_checkpoint()
 
     def index_event(self, event_id: str, session_id: str, step_id: int,
                     *, role: str, type: str, content: str,
@@ -128,6 +139,7 @@ class SQLiteMetadataIndex:
             (session_id,)
         )
         self.conn.commit()
+        self._maybe_checkpoint()
 
     def add_summary(self, session_id: str, start_step: int, end_step: int,
                     summary_type: str, content: str) -> str:
@@ -138,6 +150,7 @@ class SQLiteMetadataIndex:
             (summary_id, session_id, start_step, end_step, summary_type, content, time.time())
         )
         self.conn.commit()
+        self._maybe_checkpoint()
         return summary_id
 
     def add_artifact(self, session_id: str, artifact_type: str, name: str, path: str) -> str:
@@ -148,6 +161,7 @@ class SQLiteMetadataIndex:
             (artifact_id, session_id, artifact_type, name, path, time.time())
         )
         self.conn.commit()
+        self._maybe_checkpoint()
         return artifact_id
 
     def map_vector(self, event_id: str, session_id: str, faiss_id: int, chunk_text: str) -> str:
@@ -158,7 +172,25 @@ class SQLiteMetadataIndex:
             (vec_id, event_id, session_id, faiss_id, chunk_text, time.time())
         )
         self.conn.commit()
+        self._maybe_checkpoint()
         return vec_id
+
+    def _maybe_checkpoint(self):
+        """Throttled WAL checkpoint to prevent unbounded WAL growth.
+
+        Runs a PASSIVE checkpoint every CHECKPOINT_INTERVAL writes
+        or every CHECKPOINT_TIME seconds.
+        """
+        self._write_count += 1
+        now = time.time()
+        if (self._write_count >= CHECKPOINT_INTERVAL or
+                (now - self._last_checkpoint) >= CHECKPOINT_TIME):
+            try:
+                self.conn.execute("PRAGMA wal_checkpoint(PASSIVE)")
+                self._write_count = 0
+                self._last_checkpoint = now
+            except Exception:
+                pass  # checkpoint is advisory, never fail
 
     # --- Queries ---
 

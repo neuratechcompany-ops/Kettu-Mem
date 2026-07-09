@@ -145,7 +145,10 @@ class FAISSSemanticIndex:
 
     def build_index(self, texts: list[str], ids: list[int]) -> str:
         """
-        Build a FAISS index from texts and save to disk.
+        Build a FAISS index from texts and save atomically to disk.
+
+        Writes to a temp file first, fsyncs, then atomically renames.
+        This prevents corrupted index files on crash during write.
 
         Returns the index file path.
         """
@@ -157,20 +160,35 @@ class FAISSSemanticIndex:
         index = faiss.IndexFlatIP(self._dim)
         index.add(vectors)
 
-        # Save with ID mapping
+        # Atomic write: temp file → fsync → rename
         index_path = self.index_dir / "faiss.index"
-        faiss.write_index(index, str(index_path))
-
-        # Save ID map separately
+        tmp_index_path = self.index_dir / "faiss.index.tmp"
         id_map_path = self.index_dir / "faiss_id_map.json"
-        with open(id_map_path, "w") as f:
+        tmp_id_map_path = self.index_dir / "faiss_id_map.json.tmp"
+
+        # Write index to temp
+        faiss.write_index(index, str(tmp_index_path))
+        with open(tmp_index_path, "rb") as f:
+            os.fsync(f.fileno())
+        os.replace(tmp_index_path, index_path)
+
+        # Write ID map to temp
+        with open(tmp_id_map_path, "w") as f:
             json.dump({"ids": ids, "dim": self._dim, "count": len(ids)}, f)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_id_map_path, id_map_path)
 
         logger.info("faiss_index_built", vectors=len(ids), dim=self._dim)
         return str(index_path)
 
     def load_index(self) -> tuple:
-        """Load FAISS index and ID map. Returns (faiss_index, id_list)."""
+        """
+        Load FAISS index and ID map.
+
+        Returns (faiss_index, id_list) or (None, []) if missing/corrupted.
+        Corrupted indices are detected and logged; callers should auto-rebuild.
+        """
         import faiss
 
         index_path = self.index_dir / "faiss.index"
@@ -179,10 +197,30 @@ class FAISSSemanticIndex:
         if not index_path.exists():
             return None, []
 
-        index = faiss.read_index(str(index_path))
-        with open(id_map_path) as f:
-            id_map = json.load(f)
-        return index, id_map["ids"]
+        try:
+            index = faiss.read_index(str(index_path))
+            if not id_map_path.exists():
+                logger.warning("faiss_id_map_missing", path=str(id_map_path))
+                return None, []
+            with open(id_map_path) as f:
+                id_map = json.load(f)
+            return index, id_map["ids"]
+        except (RuntimeError, OSError, json.JSONDecodeError, ValueError) as e:
+            logger.warning("faiss_index_corrupted",
+                           path=str(index_path),
+                           error=str(e))
+            # Clean up corrupted files so a rebuild can proceed cleanly
+            for p in (index_path, id_map_path):
+                try:
+                    p.unlink(missing_ok=True)
+                except OSError:
+                    pass
+            return None, []
+
+    def is_index_healthy(self) -> bool:
+        """Check if the FAISS index is present and loadable."""
+        index, ids = self.load_index()
+        return index is not None and len(ids) > 0
 
     def search(self, query: str, k: int = 10) -> list[dict]:
         """
@@ -213,6 +251,7 @@ class FAISSSemanticIndex:
     def add_vectors(self, texts: list[str], start_id: int) -> int:
         """
         Add new vectors to an existing index (or build from scratch).
+        Uses atomic writes (temp file → fsync → rename).
 
         Returns the next available ID.
         """
@@ -222,12 +261,17 @@ class FAISSSemanticIndex:
         new_ids = list(range(start_id, start_id + len(texts)))
 
         index_path = self.index_dir / "faiss.index"
+        tmp_index_path = self.index_dir / "faiss.index.tmp"
         id_map_path = self.index_dir / "faiss_id_map.json"
+        tmp_id_map_path = self.index_dir / "faiss_id_map.json.tmp"
 
         if index_path.exists():
             existing_index = faiss.read_index(str(index_path))
             existing_index.add(vectors)
-            faiss.write_index(existing_index, str(index_path))
+            faiss.write_index(existing_index, str(tmp_index_path))
+            with open(tmp_index_path, "rb") as f:
+                os.fsync(f.fileno())
+            os.replace(tmp_index_path, index_path)
 
             with open(id_map_path) as f:
                 id_map = json.load(f)
@@ -236,11 +280,17 @@ class FAISSSemanticIndex:
         else:
             index = faiss.IndexFlatIP(self._dim)
             index.add(vectors)
-            faiss.write_index(index, str(index_path))
+            faiss.write_index(index, str(tmp_index_path))
+            with open(tmp_index_path, "rb") as f:
+                os.fsync(f.fileno())
+            os.replace(tmp_index_path, index_path)
             id_map = {"ids": new_ids, "dim": self._dim, "count": len(new_ids)}
 
-        with open(id_map_path, "w") as f:
+        with open(tmp_id_map_path, "w") as f:
             json.dump(id_map, f)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_id_map_path, id_map_path)
 
         return start_id + len(texts)
 

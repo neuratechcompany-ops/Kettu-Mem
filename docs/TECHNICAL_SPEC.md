@@ -1,6 +1,6 @@
 # Kettu Mem — Technical Specification
 
-**Версия:** 0.1.0 «Cognitive Core»  
+**Версия:** 0.2.0 «Production Release»  
 **Дата:** 2026-07-09  
 **Автор:** Аурум Вейкко Кеттунен  
 **Владелец:** Aurum Kettunen
@@ -221,8 +221,8 @@ SQLite 3.x (встроен в Python)
 
 ## 8. Контакты и лицензия
 
-- **Продукт:** Kettu Mem v0.1.0
+- **Продукт:** Kettu Mem v0.2.0
 - **Владелец:** Aurum Kettunen
 - **Разработчик:** Аурум Вейкко Кеттунен
-- **Статус:** Development Complete, Integration Complete, Hardening Complete, Fault Tolerance Verified
-- **Лицензия:** Proprietary (Aurum Kettunen)
+- **Статус:** Production Release, Stable
+- **Лицензия:** MIT
