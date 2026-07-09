@@ -1,3 +1,46 @@
+Metadata-Version: 2.4
+Name: kettu-mem
+Version: 0.2.1
+Summary: Cognitive Memory Layer for OpenClaw AI agents
+Author: Aurum Kettunen
+License: MIT
+Project-URL: Homepage, https://github.com/neuratechcompany-ops/Kettu-Mem
+Project-URL: Documentation, https://github.com/neuratechcompany-ops/Kettu-Mem/tree/main/docs
+Project-URL: Repository, https://github.com/neuratechcompany-ops/Kettu-Mem
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Topic :: Scientific/Engineering :: Artificial Intelligence
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: fastapi>=0.100
+Requires-Dist: uvicorn[standard]>=0.23
+Requires-Dist: pydantic>=2.0
+Requires-Dist: pydantic-settings>=2.0
+Requires-Dist: structlog>=24.0
+Requires-Dist: prometheus-client>=0.19
+Requires-Dist: psutil>=5.9
+Requires-Dist: python-multipart>=0.0.9
+Requires-Dist: numpy>=1.24
+Requires-Dist: faiss-cpu>=1.7
+Requires-Dist: tiktoken>=0.5
+Requires-Dist: openai>=1.0
+Requires-Dist: sentence-transformers>=2.2; extra == "local"
+Provides-Extra: local
+Requires-Dist: sentence-transformers>=2.2; extra == "local"
+Provides-Extra: dev
+Requires-Dist: pytest>=8.0; extra == "dev"
+Requires-Dist: pytest-cov>=5.0; extra == "dev"
+Requires-Dist: ruff>=0.4; extra == "dev"
+Requires-Dist: black>=24.0; extra == "dev"
+Provides-Extra: all
+Requires-Dist: kettu-mem[dev,local]; extra == "all"
+Dynamic: license-file
+
 # 🦊 Kettu Mem v0.2.1
 
 **Когнитивный слой памяти для OpenClaw-агентов**

@@ -1,0 +1,15 @@
+api
+cognitive
+config
+embeddings
+evaluation
+extractors
+faiss
+l3_archive
+layers
+memory
+plugin
+retrieval
+storage
+tests
+utils

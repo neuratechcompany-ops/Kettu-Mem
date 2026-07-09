@@ -311,3 +311,104 @@ class Test422ValidationErrors:
         """CognitiveSpaceRequest: space must be a string."""
         resp = client.post("/cognitive/space", json={"space": 12345})
         assert resp.status_code == 422, f"Expected 422, got {resp.status_code}"
+
+
+class TestHTTPAuthWithKey:
+    """HTTP-level auth tests with API key enabled.
+
+    Tests: 401 on missing/wrong key, 200 on valid key, public endpoints,
+    and 422 on invalid payloads through the full middleware stack.
+    """
+
+    @pytest.fixture
+    def client(self, monkeypatch, temp_dir):
+        """Create TestClient with API key auth enabled."""
+        monkeypatch.setenv("HERMES_MEMORY_API_KEY", "test-secret-key")
+
+        # Reload security and server modules to pick up the env var
+        import importlib
+        import api.security
+        import api.server
+        importlib.reload(api.security)
+        importlib.reload(api.server)
+
+        server = api.server
+        server._data_dir = temp_dir
+        server._mm = None
+        server._cr = None
+
+        from fastapi.testclient import TestClient
+        with TestClient(server.app, raise_server_exceptions=False) as tc:
+            yield tc
+
+        if server._mm:
+            try:
+                server._mm.close()
+            except Exception:
+                pass
+            server._mm = None
+        server._cr = None
+        server._data_dir = ""
+
+    def test_no_api_key_on_protected(self, client):
+        """POST /session/start without X-API-Key → 401."""
+        resp = client.post("/session/start", json={"session_id": "test"})
+        assert resp.status_code == 401, f"Expected 401, got {resp.status_code}: {resp.text}"
+
+    def test_wrong_api_key(self, client):
+        """POST /session/start with wrong key → 401."""
+        resp = client.post(
+            "/session/start",
+            json={"session_id": "test"},
+            headers={"X-API-Key": "wrong-key"},
+        )
+        assert resp.status_code == 401, f"Expected 401, got {resp.status_code}: {resp.text}"
+
+    def test_valid_api_key(self, client):
+        """POST /session/start with valid key → 200."""
+        resp = client.post(
+            "/session/start",
+            json={"session_id": "test"},
+            headers={"X-API-Key": "test-secret-key"},
+        )
+        assert resp.status_code == 200, f"Expected 200, got {resp.status_code}: {resp.text}"
+
+    def test_invalid_payload(self, client):
+        """POST with broken JSON → 422."""
+        resp = client.post(
+            "/session/start",
+            content=b"not valid json",
+            headers={
+                "Content-Type": "application/json",
+                "X-API-Key": "test-secret-key",
+            },
+        )
+        assert resp.status_code == 422, f"Expected 422, got {resp.status_code}: {resp.text}"
+
+    def test_health_public(self, client):
+        """GET /health without key → 200 (public endpoint)."""
+        resp = client.get("/health")
+        assert resp.status_code == 200, f"Expected 200, got {resp.status_code}: {resp.text}"
+
+    def test_metrics_public(self, client):
+        """GET /metrics without key → 200 (public endpoint)."""
+        resp = client.get("/metrics")
+        assert resp.status_code == 200, f"Expected 200, got {resp.status_code}: {resp.text}"
+
+    def test_session_end_422(self, client):
+        """POST /session/end with invalid payload → 422."""
+        resp = client.post(
+            "/session/end",
+            json={"reason": 42, "extract_facts": "not_bool"},
+            headers={"X-API-Key": "test-secret-key"},
+        )
+        assert resp.status_code == 422, f"Expected 422, got {resp.status_code}: {resp.text}"
+
+    def test_cognitive_422(self, client):
+        """POST /cognitive/start with invalid payload → 422."""
+        resp = client.post(
+            "/cognitive/start",
+            json={"goal": "test", "plan": "not_a_list", "space": "project"},
+            headers={"X-API-Key": "test-secret-key"},
+        )
+        assert resp.status_code == 422, f"Expected 422, got {resp.status_code}: {resp.text}"

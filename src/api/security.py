@@ -56,7 +56,7 @@ class TurnBeforeRequest(BaseModel):
 
 
 class TurnAfterRequest(BaseModel):
-    events: list[dict] = Field(default_factory=list)
+    events: list[dict] = Field(..., min_length=1)
     extract_facts: bool = True
 
 
@@ -66,7 +66,7 @@ class CompressRequest(BaseModel):
 
 class Mem0AddRequest(BaseModel):
     type: str = Field(default="fact", max_length=32)
-    content: str = Field(default="", max_length=8192)
+    content: str = Field(..., min_length=1, max_length=8192)
     confidence: float = Field(default=1.0, ge=0.0, le=1.0)
     entities: list[str] = Field(default_factory=list)
 
