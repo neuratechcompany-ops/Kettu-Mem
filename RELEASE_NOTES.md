@@ -1,4 +1,24 @@
-# Kettu Mem v0.2.0 Release Notes
+# Kettu Mem v0.2.1 Release Notes
+
+## Статус: ✅ Stable (Security + Validation Hotfix)
+
+Hotfix-релиз: security middleware включён, Pydantic-валидация добавлена, packaging исправлен.
+
+## Changed (от v0.2.0)
+
+- **Security middleware активирован** — `add_security_middleware(app)` теперь вызывается при старте
+- **API key из `HERMES_MEMORY_API_KEY`** — fallback на `KETTU_MEM_API_KEY`
+- **DEV MODE** — без ключа сервер работает с WARNING в логах
+- **Pydantic request models** — `/session/start`, `/turn/before`, `/turn/after`, `/mem0/add`
+- **422 на невалидный payload** — автоматически FastAPI
+- **401 на невалидный ключ** — `{"detail": "Invalid API key"}`
+- **Публичные endpoints** — `/health`, `/ready`, `/live`, `/metrics`
+- **pyproject.toml** — src-layout исправлен (`package-dir = {"" = "src"}`, `where = ["src"]`)
+- **Все версии синхронизированы на 0.2.1**
+
+---
+
+# Kettu Mem v0.2.0 Release Notes (archive)
 
 ## Статус: ✅ Stable
 

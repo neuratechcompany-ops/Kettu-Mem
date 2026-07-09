@@ -1,6 +1,6 @@
 # Kettu Mem — Technical Specification
 
-**Версия:** 0.2.0 «Production Release»  
+**Версия:** 0.2.1 «Security + Validation Hotfix»  
 **Дата:** 2026-07-09  
 **Автор:** Аурум Вейкко Кеттунен  
 **Владелец:** Aurum Kettunen

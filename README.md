@@ -1,10 +1,10 @@
-# 🦊 Kettu Mem v0.2.0
+# 🦊 Kettu Mem v0.2.1
 
 **Когнитивный слой памяти для OpenClaw-агентов**
 
 ---
 
-## Что нового в v0.2.0
+## Что нового в v0.2.1
 
 | Компонент | Статус |
 |---|---|
@@ -12,7 +12,7 @@
 | FastAPI + Uvicorn (30+ эндпоинтов) | ✅ STABLE |
 | BM25 + FAISS Hybrid Search (RRF) | ✅ STABLE |
 | Memory Quality Scoring (TTL, decay, ranking) | ✅ STABLE |
-| Security (API key auth, rate limiting) | ✅ STABLE |
+| Security (API key auth, rate limiting) | ✅ ENABLED |
 | Structlog (structured logging) | ✅ STABLE |
 | Prometheus /metrics | ✅ STABLE |
 | Session Isolation (hierarchical namespace) | ✅ STABLE |
@@ -26,14 +26,51 @@
 # Проверить всё
 python3 scripts/hermes_doctor.py
 
-# Запустить сервер
+# DEV MODE (без API key, warning в логах)
+cd src && python3 -m uvicorn api.server:app --host 127.0.0.1 --port 8765 &
+
+# PRODUCTION (с API key)
+export HERMES_MEMORY_API_KEY=your-secret-key
 cd src && python3 -m uvicorn api.server:app --host 127.0.0.1 --port 8765 &
 
 # Или Docker
 docker compose up -d
 
-# Healthcheck
+# Healthcheck (публичный, без ключа)
 curl http://127.0.0.1:8765/health
+
+# Защищённый endpoint (требует X-API-Key)
+curl -H "X-API-Key: $HERMES_MEMORY_API_KEY" http://127.0.0.1:8765/session/start \
+  -H "Content-Type: application/json" \
+  -d '{"session_id": "test"}'
+```
+
+### Публичные и защищённые endpoints
+
+| Endpoint | Доступ |
+|---|---|
+| `/health` | 🔓 Публичный |
+| `/ready` | 🔓 Публичный |
+| `/live` | 🔓 Публичный |
+| `/metrics` | 🔓 Публичный |
+| Все остальные (`/session/*`, `/turn/*`, `/mem0/*`, etc.) | 🔒 Требуют `X-API-Key` |
+
+### DEV MODE
+
+Если `HERMES_MEMORY_API_KEY` не задан — сервер работает в DEV MODE. Все endpoints публичные. В логах выводится WARNING:
+
+```
+SECURITY: No API key configured (HERMES_MEMORY_API_KEY not set).
+Server running in DEV MODE — all endpoints are public.
+Set HERMES_MEMORY_API_KEY for production.
+```
+
+### PRODUCTION
+
+```bash
+export HERMES_MEMORY_API_KEY=your-secure-random-key
+# Все защищённые endpoints требуют заголовок:
+curl -H "X-API-Key: $HERMES_MEMORY_API_KEY" http://127.0.0.1:8765/session/start
 ```
 
 ## Установка для агентов

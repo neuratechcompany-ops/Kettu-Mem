@@ -1,5 +1,36 @@
 # Changelog
 
+## [0.2.1] — 2026-07-09 (Security + Validation Hotfix)
+
+### 🔒 Security (Enabled)
+- Security middleware now actually enabled in server startup
+- API key auth via `HERMES_MEMORY_API_KEY` env var
+- DEV MODE when key not set (warning in logs, all endpoints public)
+- Protected endpoints require `X-API-Key` header when key is set
+- Invalid key returns 401 `{"detail": "Invalid API key"}`
+- Public endpoints: `/health`, `/ready`, `/live`, `/metrics`
+- Middleware order: CORS → Security → Logging → Metrics
+
+### ✅ Pydantic Validation
+- `/session/start` → `SessionStartRequest`
+- `/turn/before` → `TurnBeforeRequest`
+- `/turn/after` → `TurnAfterRequest`
+- `/mem0/add` → `Mem0AddRequest`
+- Invalid payloads → 422 (automatic FastAPI)
+
+### 📦 Packaging
+- `pyproject.toml`: src-layout with `package-dir = {"" = "src"}` + `where = ["src"]`
+- `pip install -e .` verified working
+
+### 🔢 Version Sync
+- All version references updated to 0.2.1
+- Files: VERSION.json, src/VERSION.json, pyproject.toml, SKILL.md, README.md,
+  CHANGELOG.md, RELEASE_NOTES.md, docs/TECHNICAL_SPEC.md, server.py
+
+### 🧪 Tests
+- Security tests: API key auth (valid/wrong/missing), Pydantic validation (422),
+  health public (200), rate limiting, dev mode, middleware connection
+
 ## [0.2.0] — 2026-07-09 (Stable)
 
 ### 🏗 Architecture

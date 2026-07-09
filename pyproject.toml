@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kettu-mem"
-version = "0.2.0"
+version = "0.2.1"
 description = "Cognitive Memory Layer for OpenClaw AI agents"
 readme = "README.md"
 license = {text = "MIT"}
@@ -51,8 +51,11 @@ Homepage = "https://github.com/neuratechcompany-ops/Kettu-Mem"
 Documentation = "https://github.com/neuratechcompany-ops/Kettu-Mem/tree/main/docs"
 Repository = "https://github.com/neuratechcompany-ops/Kettu-Mem"
 
+[tool.setuptools]
+package-dir = {"" = "src"}
+
 [tool.setuptools.packages.find]
-include = ["api*", "memory*", "storage*", "retrieval*", "embeddings*", "extractors*", "evaluation*", "config*", "utils*"]
+where = ["src"]
 
 [tool.ruff]
 line-length = 100

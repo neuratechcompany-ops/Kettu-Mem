@@ -55,7 +55,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from retrieval.context_builder import ContextConfig, BudgetStrategy
 from memory.memory_manager import MemoryManager
 from extractors.cognitive_runtime import CognitiveRuntime, MemorySpace, StepOutcome
-from api.security import add_security_middleware
+from api.security import (
+    add_security_middleware,
+    SessionStartRequest,
+    TurnBeforeRequest,
+    TurnAfterRequest,
+    Mem0AddRequest,
+)
 from utils.logging import add_logging_middleware, setup_logging
 from config import settings
 from api.metrics import add_metrics_endpoint, MetricsMiddleware, metrics
@@ -182,7 +188,7 @@ async def lifespan(app: FastAPI):
     _cr = CognitiveRuntime(_mm, str(Path(data) / "cognitive"))
     metrics.set_memory_manager(_mm)
     setup_logging()
-    logger.info("server_starting", data_dir=data, version="0.2.0")
+    logger.info("server_starting", data_dir=data, version="0.2.1")
 
     yield
 
@@ -196,12 +202,12 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Kettu Mem",
-    version="0.2.0",
+    version="0.2.1",
     description="Cognitive Memory Layer for OpenClaw agents",
     lifespan=lifespan,
 )
 
-# CORS
+# CORS (outermost)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -209,7 +215,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Logging (structlog with request_id) — outermost
+# Security (API key auth, rate limiting) — before logging/metrics
+add_security_middleware(app)
+
+# Logging (structlog with request_id)
 add_logging_middleware(app)
 
 # Metrics (Prometheus) — middleware
@@ -277,11 +286,10 @@ async def stats():
 # ── Session management ──────────────────────────────────
 
 @app.post("/session/start")
-async def session_start(request: Request):
+async def session_start(body: SessionStartRequest):
     """Start or resume a session."""
-    body = await request.json()
-    sid = body.get("session_id", f"session-{int(time.time())}")
-    project = body.get("project_id", "default")
+    sid = body.session_id or f"session-{int(time.time())}"
+    project = body.project_id
     _mm.start_session(sid, project_id=project)
     return {
         "status": "started",
@@ -308,14 +316,13 @@ async def session_end(request: Request):
 # ── Turn endpoints ──────────────────────────────────────
 
 @app.post("/turn/before")
-async def turn_before(request: Request):
+async def turn_before(body: TurnBeforeRequest):
     """Build context for LLM call."""
-    body = await request.json()
-    query = body.get("query", "")
-    strategy_name = body.get("strategy", "normal")
-    system_prompt = body.get("system_prompt")
-    tools = body.get("tools", [])
-    budget = body.get("token_budget")
+    query = body.query
+    strategy_name = body.strategy
+    system_prompt = body.system_prompt
+    tools = body.tools
+    budget = body.token_budget
 
     strategy = getattr(BudgetStrategy, strategy_name.upper(), BudgetStrategy.NORMAL)
     config = ContextConfig.from_strategy(strategy) if not budget else ContextConfig(token_budget=budget)
@@ -335,11 +342,10 @@ async def turn_before(request: Request):
 
 
 @app.post("/turn/after")
-async def turn_after(request: Request):
+async def turn_after(body: TurnAfterRequest):
     """Record events after LLM call."""
-    body = await request.json()
-    events = body.get("events", [])
-    extract_facts = body.get("extract_facts", True)
+    events = body.events
+    extract_facts = body.extract_facts
 
     recorded = []
     for evt in events:
@@ -426,13 +432,12 @@ async def mem0_entities():
 
 
 @app.post("/mem0/add")
-async def mem0_add(request: Request):
+async def mem0_add(body: Mem0AddRequest):
     """Add a fact to Mem0."""
-    body = await request.json()
-    fact_type = body.get("type", "fact")
-    content = body.get("content", "")
-    confidence = body.get("confidence", 1.0)
-    entities = body.get("entities", [])
+    fact_type = body.type
+    content = body.content
+    confidence = body.confidence
+    entities = body.entities
     fact = _mm.add_mem0_fact(fact_type, content,
                              confidence=confidence, entities=entities)
     return {"status": "added", "fact": fact.to_dict()}
@@ -547,7 +552,7 @@ def run_server(data_dir: str = None, port: int = 8765, host: str = "127.0.0.1"):
     _data_dir = data_dir or "/tmp/mm-server"
     _port = port
 
-    logger.info("server_boot", host=host, port=port, version="0.2.0")
+    logger.info("server_boot", host=host, port=port, version="0.2.1")
 
     uvicorn.run(
         "api.server:app",
@@ -560,7 +565,7 @@ def run_server(data_dir: str = None, port: int = 8765, host: str = "127.0.0.1"):
 
 if __name__ == "__main__":
     import argparse
-    parser = argparse.ArgumentParser(description="Kettu Mem v0.2.0")
+    parser = argparse.ArgumentParser(description="Kettu Mem v0.2.1")
     parser.add_argument("--data-dir", default="/tmp/mm-server")
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--host", default="127.0.0.1")

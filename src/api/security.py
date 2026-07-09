@@ -122,29 +122,28 @@ class InputSanitizer:
 
 # ── API Key Auth ────────────────────────────────────────
 
+def _get_api_key() -> Optional[str]:
+    """Resolve API key: HERMES_MEMORY_API_KEY > KETTU_MEM_API_KEY > settings."""
+    import os
+    import logging
+    dev_logger = logging.getLogger("kettu-mem.security")
+
+    key = os.getenv("HERMES_MEMORY_API_KEY") or settings.api_key
+    if not key:
+        dev_logger.warning(
+            "SECURITY: No API key configured (HERMES_MEMORY_API_KEY not set). "
+            "Server running in DEV MODE — all endpoints are public. "
+            "Set HERMES_MEMORY_API_KEY for production."
+        )
+    return key
+
+
 class APIKeyAuth:
     """API Key authentication middleware."""
 
     def __init__(self, api_key: str = None):
-        self.api_key = api_key or settings.api_key
+        self.api_key = api_key or _get_api_key()
         self._enabled = bool(self.api_key)
-
-    async def __call__(self, request: Request, call_next):
-        if not self._enabled:
-            return await call_next(request)
-
-        # Skip health endpoints
-        if request.url.path in ("/health", "/ready", "/live", "/health/deep"):
-            return await call_next(request)
-
-        provided_key = request.headers.get("X-API-Key", "")
-        if not provided_key or provided_key != self.api_key:
-            return JSONResponse(
-                status_code=401,
-                content={"error": "unauthorized", "detail": "Invalid or missing API key"},
-            )
-
-        return await call_next(request)
 
 
 # ── Rate Limiter ────────────────────────────────────────
@@ -221,8 +220,12 @@ class RateLimiter:
 
 # ── Security Middleware (combined) ──────────────────────
 
+# Public endpoints (no API key required)
+PUBLIC_PATHS = {"/health", "/ready", "/live", "/health/deep", "/metrics"}
+
+
 class SecurityMiddleware(BaseHTTPMiddleware):
-    """Combined security middleware: rate limiting + input validation."""
+    """Combined security middleware: API key auth + rate limiting + input validation."""
 
     def __init__(self, app):
         super().__init__(app)
@@ -230,6 +233,15 @@ class SecurityMiddleware(BaseHTTPMiddleware):
         self.api_key_auth = APIKeyAuth()
 
     async def dispatch(self, request: Request, call_next):
+        # API key auth (unless public endpoint)
+        if self.api_key_auth._enabled and request.url.path not in PUBLIC_PATHS:
+            provided_key = request.headers.get("X-API-Key", "")
+            if not provided_key or provided_key != self.api_key_auth.api_key:
+                return JSONResponse(
+                    status_code=401,
+                    content={"detail": "Invalid API key"},
+                )
+
         # Rate limit
         client_ip = self.rate_limiter.get_client_ip(request)
         allowed, reason = self.rate_limiter.is_allowed(client_ip)

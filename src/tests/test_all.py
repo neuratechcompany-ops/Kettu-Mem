@@ -900,7 +900,7 @@ class TestServerHealth:
         """FastAPI app can be imported without errors."""
         from api.server import app
         assert app.title == "Kettu Mem"
-        assert app.version == "0.2.0"
+        assert app.version == "0.2.1"
 
     def test_health_check_no_mm(self):
         """Health check works even without MemoryManager."""
@@ -1062,7 +1062,7 @@ class TestAPIServerEndpoints:
     def test_app_meta(self):
         from api.server import app
         assert app.title == "Kettu Mem"
-        assert app.version == "0.2.0"
+        assert app.version == "0.2.1"
 
     def test_routes_registered(self):
         from api.server import app
