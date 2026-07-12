@@ -27,21 +27,21 @@ Usage:
   from api.metrics import add_metrics_endpoint
   add_metrics_endpoint(app)
 """
-import time
-import psutil
 import os
-from typing import Optional
-from contextvars import ContextVar
+import time
 
+import psutil
+from fastapi import Response
 from prometheus_client import (
-    Counter, Histogram, Gauge, Info,
-    generate_latest, CONTENT_TYPE_LATEST,
+    CONTENT_TYPE_LATEST,
+    Counter,
+    Gauge,
+    Histogram,
+    Info,
+    generate_latest,
 )
-from fastapi import Request, Response
-from fastapi.responses import PlainTextResponse
 
 from config import settings
-
 
 # ── Metrics Definitions ─────────────────────────────────
 

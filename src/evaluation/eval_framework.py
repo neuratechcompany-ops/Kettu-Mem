@@ -26,14 +26,12 @@ Integration:
 """
 import json
 import sys
-import time
-from pathlib import Path
 from typing import Optional
 
 from .eval_store import EvalStore
-from .telemetry_collector import TelemetryCollector
-from .metrics_engine import MetricsEngine
 from .haes_calculator import HAESCalculator
+from .metrics_engine import MetricsEngine
+from .telemetry_collector import TelemetryCollector
 
 
 class EvaluationFramework:
@@ -296,7 +294,7 @@ class EvaluationFramework:
             task_desc = args[2] if len(args) > 2 else ""
             rid = ef.start_run(task_name, task_desc)
             print(f"Run ID: {rid}")
-            print(f"Use 'hermes eval stop' when done.")
+            print("Use 'hermes eval stop' when done.")
 
         elif cmd == "stop":
             success = "--fail" not in args

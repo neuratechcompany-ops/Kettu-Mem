@@ -11,18 +11,13 @@ import os
 import random
 import sys
 import time
-import uuid
 from pathlib import Path
 
 # Ensure we can import from src
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from evaluation.eval_store import EvalStore, StepMetrics
-from evaluation.telemetry_collector import TelemetryCollector
-from evaluation.metrics_engine import MetricsEngine
-from evaluation.haes_calculator import HAESCalculator
 from evaluation.eval_framework import EvaluationFramework
-
+from evaluation.eval_store import EvalStore, StepMetrics
 
 # ── Simulated agent loop for testing ────────────────────
 
@@ -41,8 +36,8 @@ class SimulatedAgent:
         # Try real components
         if mode == "real":
             try:
-                from memory_manager import MemoryManager
                 from layers.cognitive_runtime import CognitiveRuntime
+                from memory_manager import MemoryManager
                 self.mm = MemoryManager(str(Path.home() / ".openclaw/memory-store"))
                 self.cr = CognitiveRuntime(self.mm)
                 print("[Agent] Real MemoryManager + CognitiveRuntime loaded")
@@ -418,8 +413,8 @@ def test_store_integrity():
     print("🧪 TEST 5: EvalStore Integrity")
     print("=" * 60)
 
-    import tempfile
     import shutil
+    import tempfile
 
     tmpdir = tempfile.mkdtemp()
     try:

@@ -26,9 +26,8 @@ Interpretation:
   20-39:  Poor — major issues
   0-19:   Critical — agent barely functional
 """
-from dataclasses import dataclass, field
 from collections import OrderedDict
-from typing import Optional
+from dataclasses import dataclass
 
 
 @dataclass(frozen=True)

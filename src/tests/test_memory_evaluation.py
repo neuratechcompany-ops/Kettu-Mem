@@ -9,19 +9,17 @@ Acceptance tests for Hermes Memory Evaluation Framework v1.
   Benchmark 5 — Memory Pollution
 """
 import json
-import os
 import random
 import sys
-import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from evaluation.memory_eval_store import MemoryEvalStore, PromptStabilitySnapshot
-from evaluation.memory_telemetry import MemoryTelemetry, MemoryTelemetry as MT
-from evaluation.memory_metrics_engine import MemoryMetricsEngine
-from evaluation.mes_calculator import MESCalculator
 from evaluation.memory_eval_framework import MemoryEvaluationFramework
+from evaluation.memory_eval_store import MemoryEvalStore
+from evaluation.memory_metrics_engine import MemoryMetricsEngine
+from evaluation.memory_telemetry import MemoryTelemetry as MT
+from evaluation.mes_calculator import MESCalculator
 
 
 def load_mm():
@@ -42,7 +40,6 @@ def generate_synthetic_snapshots(store, run_id: str, n_events: int,
                                  with_retrieval: bool = True,
                                  with_pollution: bool = False):
     """Generate realistic synthetic snapshot data for testing."""
-    import uuid
 
     for step in range(0, n_events, max(1, n_events // 10)):
         # Compression
@@ -142,7 +139,8 @@ def test_store_integrity():
     print("🧪 TEST: MemoryEvalStore Integrity")
     print("=" * 55)
 
-    import tempfile, shutil
+    import shutil
+    import tempfile
     tmp = tempfile.mkdtemp()
     try:
         store = MemoryEvalStore(tmp)
@@ -216,15 +214,15 @@ def test_store_integrity():
         store.save_memory_metrics(rid, {"mes": mes["mes"], **metrics})
         saved = store.get_memory_metrics(rid)
         assert saved, "Metrics not saved"
-        assert saved["mes_score"] == mes["mes"], f"MES mismatch"
+        assert saved["mes_score"] == mes["mes"], "MES mismatch"
 
         store.close()
 
-        print(f"  ✅ Run created + snapshots")
-        print(f"  ✅ 3 prompt checkpoints")
+        print("  ✅ Run created + snapshots")
+        print("  ✅ 3 prompt checkpoints")
         print(f"  ✅ MES: {mes['mes']}/100")
-        print(f"  ✅ Metrics saved & retrieved")
-        print(f"  ✅ PASSED")
+        print("  ✅ Metrics saved & retrieved")
+        print("  ✅ PASSED")
 
     finally:
         shutil.rmtree(tmp, ignore_errors=True)

@@ -14,7 +14,7 @@ import time
 from dataclasses import dataclass
 from typing import Optional
 
-from .eval_store import EvalStore, StepMetrics, RunMeta
+from .eval_store import EvalStore, StepMetrics
 
 
 @dataclass

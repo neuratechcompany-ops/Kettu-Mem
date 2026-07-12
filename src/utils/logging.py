@@ -14,12 +14,12 @@ Usage:
   logger = get_logger(__name__)
   logger.info("event_recorded", event_id="abc", latency_ms=12.3)
 """
+import sys
 import time
 import uuid
-import sys
-import structlog
-from typing import Optional
 from contextvars import ContextVar
+
+import structlog
 
 from config import settings
 

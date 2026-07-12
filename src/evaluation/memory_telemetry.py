@@ -12,8 +12,6 @@ Hooks into:
 Non-invasive: reads state without modifying MemoryManager.
 """
 import time
-from pathlib import Path
-from typing import Optional
 
 
 class MemoryTelemetry:

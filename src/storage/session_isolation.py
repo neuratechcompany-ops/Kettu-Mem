@@ -14,9 +14,7 @@ Usage:
   ns = SessionNamespace(project="myproject", workspace="default", agent="main", user="user1")
   ns.session_path()  # → "myproject/default/main/user1/session5"
 """
-from dataclasses import dataclass, field
-from typing import Optional
-from pathlib import Path
+from dataclasses import dataclass
 
 
 @dataclass

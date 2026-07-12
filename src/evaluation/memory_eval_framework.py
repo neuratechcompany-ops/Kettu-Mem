@@ -17,8 +17,8 @@ from pathlib import Path
 from typing import Optional
 
 from .memory_eval_store import MemoryEvalStore
-from .memory_telemetry import MemoryTelemetry
 from .memory_metrics_engine import MemoryMetricsEngine
+from .memory_telemetry import MemoryTelemetry
 from .mes_calculator import MESCalculator
 
 
@@ -133,7 +133,7 @@ class MemoryEvaluationFramework:
         avg_mes = sum(mes_scores) / max(len(mes_scores), 1)
 
         print(f"\n{'='*50}")
-        print(f"🏁 BENCHMARK SUITE COMPLETE")
+        print("🏁 BENCHMARK SUITE COMPLETE")
         print(f"   Average MES: {avg_mes:.1f}/100")
         for k, v in results.items():
             print(f"   {k}: MES {v.get('mes', 'N/A')}/100")
@@ -296,7 +296,7 @@ class MemoryEvaluationFramework:
                 checks.append(("Avg MES", stats["avg_mes"] > 0, f"{stats['avg_mes']}/100"))
             for name, ok, detail in checks:
                 print(f"  {'✅' if ok else '❌'} {name}: {detail}")
-            print(f"🏁 DOCTOR: OK")
+            print("🏁 DOCTOR: OK")
 
         elif cmd == "export-report":
             if len(args) < 2:

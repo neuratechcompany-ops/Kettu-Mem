@@ -12,8 +12,6 @@ Memory Metrics Engine — calculates all memory-specific metrics.
   8. Recovery (10 pts)
   9. Pollution (10 pts) — bonus/deduction
 """
-import math
-from collections import defaultdict
 
 
 class MemoryMetricsEngine:

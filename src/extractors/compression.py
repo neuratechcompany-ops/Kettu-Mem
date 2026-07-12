@@ -17,9 +17,7 @@ Strategy:
   3. Store structured summary in SQLite
   4. Context builder uses summary instead of raw events
 """
-import time
-import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional
 
 
@@ -172,7 +170,7 @@ class CompressionEngine:
         to_compress = uncompressed[:mid]
         start = to_compress[0]["step_id"]
         end = to_compress[-1]["step_id"]
- 
+
         return self.compress_range(session_id, start, end)
 
     def _extract_decisions(self, events: list[dict]) -> list[str]:
@@ -260,7 +258,7 @@ class CompressionEngine:
 
         # Entities
         if entities:
-            parts.append(f"\n## Entities Mentioned")
+            parts.append("\n## Entities Mentioned")
             parts.append(f"- {', '.join(entities[:15])}")
 
         # Open issues

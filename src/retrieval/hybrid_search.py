@@ -16,7 +16,6 @@ Usage:
 """
 import re
 import time
-from typing import Optional
 from collections import defaultdict
 
 from config import settings

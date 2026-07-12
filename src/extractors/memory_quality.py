@@ -20,8 +20,8 @@ Usage:
   scorer = MemoryQualityScorer()
   score = scorer.calculate(fact)
 """
-import time
 import math
+import time
 from dataclasses import dataclass
 from enum import Enum
 

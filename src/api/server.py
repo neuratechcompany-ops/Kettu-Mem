@@ -761,7 +761,7 @@ async def status_get():
     return {
         "status": "healthy",
         "uptime_seconds": int(uptime),
-        "version": "0.3.0",
+        "version": "0.3.1",
         "storage": storage_status,
         "counts": counts,
         "memory_usage_mb": mem_usage,

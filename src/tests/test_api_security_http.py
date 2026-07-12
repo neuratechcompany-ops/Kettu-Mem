@@ -1,5 +1,6 @@
 """HTTP security integration tests via TestClient."""
 import os
+
 import pytest
 from fastapi.testclient import TestClient
 

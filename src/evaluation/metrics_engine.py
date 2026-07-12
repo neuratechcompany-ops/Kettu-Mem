@@ -16,8 +16,6 @@ Input: list of step dicts from EvalStore
 Output: dict of metric groups with scores and raw numbers
 """
 import math
-from collections import defaultdict
-from typing import Optional
 
 
 class MetricsEngine:

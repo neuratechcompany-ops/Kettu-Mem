@@ -14,16 +14,12 @@ jobs:
       - uses: astral-sh/setup-uv@v5
         with:
           python-version: "3.12"
+      - name: Install
+        run: uv pip install ruff black --python $(which python)
       - name: Ruff lint
-        run: |
-          uvx ruff check src/api/server.py src/api/error_buffer.py src/memory/memory_manager.py \
-            src/extractors/ingestion_filter.py \
-            src/tests/test_concurrent_sessions.py src/tests/test_tool_output_regression.py
+        run: ruff check src/
       - name: Black format check
-        run: |
-          uvx black --check src/api/server.py src/api/error_buffer.py src/memory/memory_manager.py \
-            src/extractors/ingestion_filter.py \
-            src/tests/test_concurrent_sessions.py src/tests/test_tool_output_regression.py
+        run: black --check src/
 
   test:
     needs: lint
@@ -36,29 +32,27 @@ jobs:
       - uses: astral-sh/setup-uv@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Install dependencies
+      - name: Install
         run: |
-          uv pip install --system fastapi uvicorn pydantic-settings structlog prometheus-client psutil python-multipart faiss-cpu numpy openai tiktoken pandas
-          uv pip install --system pytest pytest-cov
-      - name: Run tests with coverage
-        run: python -m pytest src/tests/ -v --tb=short --cov=src --cov-report=xml
-      - name: Upload coverage
-        uses: codecov/codecov-action@v4
-        with:
-          file: ./coverage.xml
+          uv venv
+          source .venv/bin/activate
+          uv pip install -e ".[dev]"
+      - name: pytest
+        run: |
+          source .venv/bin/activate
+          python -m pytest src/tests/ -v --tb=short
 
   build:
     needs: test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      - name: Build Docker image
+      - name: Docker build
         run: docker build -t kettu-mem:test .
-      - name: Smoke test
+      - name: Docker smoke
         run: |
           docker run -d --name kettu-test -p 18765:8765 kettu-mem:test
           sleep 5
-          curl -s http://localhost:18765/health | grep ok
+          curl -fsS http://localhost:18765/health | grep ok
+          curl -fsS http://localhost:18765/status
           docker stop kettu-test

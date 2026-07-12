@@ -14,8 +14,8 @@ WAL checkpoint policy:
 - Automatic PASSIVE checkpoint every CHECKPOINT_INTERVAL writes or
   CHECKPOINT_TIME seconds to prevent unbounded WAL growth.
 """
-import json
 import hashlib
+import json
 import sqlite3
 import time
 import uuid

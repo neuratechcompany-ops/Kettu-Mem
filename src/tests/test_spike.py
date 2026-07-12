@@ -10,23 +10,19 @@ Tests all 6 layers:
   5. Compression Engine (v2: auto-trigger, incremental)
   6. Mem0 Store (ADD-only extraction, preferences, decisions, entities)
 """
-import json
 import os
-import sys
-import time
 import shutil
+import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from layers.l3_verbatim import L3VerbatimArchive
-from layers.sqlite_index import SQLiteMetadataIndex
-from layers.faiss_index import FAISSSemanticIndex
-from layers.context_builder import (
-    ContextBuilder, ContextConfig, BudgetStrategy, ToolSchema
-)
 from layers.compression import CompressionEngine
-from layers.mem0 import Mem0Store, FactType
+from layers.context_builder import BudgetStrategy, ContextBuilder, ContextConfig, ToolSchema
+from layers.faiss_index import FAISSSemanticIndex
+from layers.l3_verbatim import L3VerbatimArchive
+from layers.mem0 import FactType, Mem0Store
+from layers.sqlite_index import SQLiteMetadataIndex
 from memory_manager import MemoryManager
 
 
@@ -144,7 +140,7 @@ def test_sqlite():
     assert len(sql.get_events_by_type("s1", "message")) == 1
     sql.add_summary("s1", 0, 5, "test", "Summary text")
     assert len(sql.get_summaries("s1")) == 1
-    print(f"  ✅ 2 events, 1 summary, queries OK")
+    print("  ✅ 2 events, 1 summary, queries OK")
     sql.close()
 
 
@@ -221,7 +217,7 @@ def test_context_builder():
         assert "Preferences" in prompt or "Decisions" in prompt, "Mem0 facts not rendered"
         assert "raw archive" not in prompt.lower()
 
-    print(f"\n  ✅ All 3 strategies work, Mem0 integrated, under budget")
+    print("\n  ✅ All 3 strategies work, Mem0 integrated, under budget")
 
 
 # ═══════════════════════════════════════════════════════════
@@ -274,11 +270,11 @@ def test_compression():
     if result2:
         print(f"  ✅ Incremental compress: triggered ({result2.events_compressed} events)")
     else:
-        print(f"  ✅ Incremental compress: skipped (all events already compressed)")
+        print("  ✅ Incremental compress: skipped (all events already compressed)")
 
     # L3 preservation
     assert len(l3.read_session(sid)) == 10
-    print(f"  ✅ L3 preserved all 10 events")
+    print("  ✅ L3 preserved all 10 events")
 
     sql.close()
 
@@ -360,7 +356,7 @@ def test_mem0():
 
     mem0.close()
 
-    print(f"\n  ✅ Mem0: ADD-only, dedup, extraction, entity tracking — all OK")
+    print("\n  ✅ Mem0: ADD-only, dedup, extraction, entity tracking — all OK")
 
 
 # ═══════════════════════════════════════════════════════════
@@ -383,7 +379,7 @@ def test_full_pipeline():
     mm.record_batch(test_events)
 
     # Force Mem0 extraction from all events
-    print(f"  🧠 Extracting Mem0 facts...")
+    print("  🧠 Extracting Mem0 facts...")
     facts = mm.extract_all_facts()
     print(f"  ✅ Extracted {len(facts)} Mem0 facts")
 
@@ -395,7 +391,7 @@ def test_full_pipeline():
     print(f"  📊 Mem0: {stats['mem0_stats']}")
 
     # Build context with query (triggers Mem0 + FAISS)
-    print(f"\n  🔍 Testing context with Mem0...")
+    print("\n  🔍 Testing context with Mem0...")
 
     queries = [
         ("инструменты для документации", BudgetStrategy.TIGHT),
@@ -445,13 +441,13 @@ def test_full_pipeline():
     mm.close()
 
     print(f"\n{'='*60}")
-    print(f"🎉 SPIKE v2 PASSED: All 6 layers with Mem0")
+    print("🎉 SPIKE v2 PASSED: All 6 layers with Mem0")
     print(f"{'='*60}")
     print(f"  L3: {stats['l3_events']} events, immutable JSONL")
-    print(f"  SQLite: metadata indexed + Mem0 structured")
+    print("  SQLite: metadata indexed + Mem0 structured")
     print(f"  FAISS: vector index ({stats['faiss_stats']['count']} vectors)")
-    print(f"  Context Builder: 3 strategies, weighted, Mem0-aware")
-    print(f"  Compression: auto-trigger, incremental, entities")
+    print("  Context Builder: 3 strategies, weighted, Mem0-aware")
+    print("  Compression: auto-trigger, incremental, entities")
     print(f"  Mem0: {mem0_stats['total_facts']} facts, ADD-only, dedup")
 
 

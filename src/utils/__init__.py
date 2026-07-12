@@ -8,14 +8,14 @@ Exports:
 """
 
 from utils.logging import (
-    setup_logging,
-    get_logger,
     LoggingMiddleware,
-    get_request_id,
-    set_request_id,
-    get_session_id,
-    set_session_id,
     get_latency_ms,
+    get_logger,
+    get_request_id,
+    get_session_id,
+    set_request_id,
+    set_session_id,
+    setup_logging,
     start_latency_timer,
 )
 

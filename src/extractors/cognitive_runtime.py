@@ -12,7 +12,6 @@ Key invariants:
 """
 import json
 import time
-import uuid
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
@@ -442,10 +441,10 @@ class CognitiveRuntime:
                 parts.append(f"Suggested tool: {current.tool_hint}")
 
         if ps.blockers:
-            parts.append(f"\n## 🚫 Blockers\n" + "\n".join(f"- {b}" for b in ps.blockers))
+            parts.append("\n## 🚫 Blockers\n" + "\n".join(f"- {b}" for b in ps.blockers))
 
         if ps.open_questions:
-            parts.append(f"\n## ❓ Open Questions\n" + "\n".join(f"- {q}" for q in ps.open_questions))
+            parts.append("\n## ❓ Open Questions\n" + "\n".join(f"- {q}" for q in ps.open_questions))
 
         if ps.next_action:
             parts.append(f"\n## 👉 Next Action\n{ps.next_action}")

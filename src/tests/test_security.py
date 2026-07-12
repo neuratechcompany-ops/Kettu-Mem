@@ -3,10 +3,9 @@ Security tests for Kettu Mem v0.2.1.
 
 Tests: API key auth, Pydantic validation, rate limiting, public endpoints.
 """
-import os
+import shutil
 import sys
 import tempfile
-import shutil
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -117,8 +116,9 @@ class TestHealthPublicEndpoints:
     """Public endpoints should work without any key."""
 
     def test_health_no_key(self):
-        from api.server import health
         import asyncio
+
+        from api.server import health
         result = asyncio.new_event_loop().run_until_complete(health())
         assert result["status"] == "ok"
 
@@ -153,8 +153,9 @@ class TestRateLimitingDirect:
         assert allowed
 
     def test_get_client_ip_forwarded(self):
-        from api.security import RateLimiter
         from unittest.mock import MagicMock
+
+        from api.security import RateLimiter
         rl = RateLimiter()
         mock_req = MagicMock()
         mock_req.headers = {"X-Forwarded-For": "10.0.0.1, 10.0.0.2"}
@@ -185,8 +186,9 @@ class TestPydanticValidation:
         assert r.token_budget == 32000
 
     def test_turn_before_invalid_budget(self):
-        from api.security import TurnBeforeRequest
         import pydantic
+
+        from api.security import TurnBeforeRequest
         with pytest.raises(pydantic.ValidationError):
             TurnBeforeRequest(token_budget=-5)
 
@@ -203,8 +205,9 @@ class TestPydanticValidation:
         assert r.confidence == 0.8
 
     def test_mem0_add_invalid_confidence(self):
-        from api.security import Mem0AddRequest
         import pydantic
+
+        from api.security import Mem0AddRequest
         with pytest.raises(pydantic.ValidationError):
             Mem0AddRequest(confidence=2.0)
 
@@ -243,6 +246,7 @@ class Test422ValidationErrors:
     @pytest.fixture
     def client(self, temp_dir):
         from fastapi.testclient import TestClient
+
         import api.server as server_module
 
         server_module._data_dir = temp_dir
@@ -327,6 +331,7 @@ class TestHTTPAuthWithKey:
 
         # Reload security and server modules to pick up the env var
         import importlib
+
         import api.security
         import api.server
         importlib.reload(api.security)

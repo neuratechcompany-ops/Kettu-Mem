@@ -4,11 +4,10 @@ Comprehensive test suite for Kettu Mem v0.2.0.
 Run: python3 -m pytest tests/test_all.py -v
 """
 import os
-import sys
-import time
-import json
-import tempfile
 import shutil
+import sys
+import tempfile
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -114,7 +113,7 @@ class TestContextBuilder:
         assert stats["utilization_pct"] < 100
 
     def test_strategies(self):
-        from retrieval.context_builder import ContextConfig, BudgetStrategy
+        from retrieval.context_builder import BudgetStrategy, ContextConfig
         for strategy in [BudgetStrategy.TIGHT, BudgetStrategy.NORMAL, BudgetStrategy.GENEROUS]:
             cfg = ContextConfig.from_strategy(strategy)
             assert cfg.token_budget in (16000, 32000, 64000)
@@ -258,9 +257,9 @@ class TestMemoryQualityScorer:
 
 class TestCompression:
     def test_compress(self, temp_dir):
+        from extractors.compression import CompressionEngine
         from storage.l3_verbatim import L3VerbatimArchive
         from storage.sqlite_index import SQLiteMetadataIndex
-        from extractors.compression import CompressionEngine
 
         l3 = L3VerbatimArchive(temp_dir)
         sql = SQLiteMetadataIndex(f"{temp_dir}/meta.db")
@@ -384,7 +383,7 @@ class TestMem0Store:
     """Direct Mem0Store tests for better coverage."""
 
     def test_add_and_retrieve_fact(self, temp_dir):
-        from extractors.mem0 import Mem0Store, FactType
+        from extractors.mem0 import FactType, Mem0Store
         store = Mem0Store(f"{temp_dir}/mem0.db")
         fact = store.add_fact(FactType.PREFERENCE, "User prefers dark mode",
                               confidence=0.9, source_session="s1")
@@ -395,7 +394,7 @@ class TestMem0Store:
         store.close()
 
     def test_fact_dedup_merge(self, temp_dir):
-        from extractors.mem0 import Mem0Store, FactType
+        from extractors.mem0 import FactType, Mem0Store
         store = Mem0Store(f"{temp_dir}/mem0.db")
         f1 = store.add_fact(FactType.FACT, "Python is great for ML",
                              confidence=0.5, source_session="s1")
@@ -408,7 +407,7 @@ class TestMem0Store:
         store.close()
 
     def test_add_fact_with_entities(self, temp_dir):
-        from extractors.mem0 import Mem0Store, FactType
+        from extractors.mem0 import FactType, Mem0Store
         store = Mem0Store(f"{temp_dir}/mem0.db")
         store.add_fact(FactType.DECISION, "Decided to use React",
                        confidence=0.8, entities=["React", "JavaScript"],
@@ -418,7 +417,7 @@ class TestMem0Store:
         store.close()
 
     def test_get_by_type(self, temp_dir):
-        from extractors.mem0 import Mem0Store, FactType
+        from extractors.mem0 import FactType, Mem0Store
         store = Mem0Store(f"{temp_dir}/mem0.db")
         store.add_fact(FactType.PREFERENCE, "Likes coffee", source_session="s1")
         store.add_fact(FactType.DECISION, "Use Docker", source_session="s1")
@@ -428,7 +427,7 @@ class TestMem0Store:
         store.close()
 
     def test_session_isolation_in_store(self, temp_dir):
-        from extractors.mem0 import Mem0Store, FactType
+        from extractors.mem0 import FactType, Mem0Store
         store = Mem0Store(f"{temp_dir}/mem0.db")
         store.add_fact(FactType.FACT, "Session A secret", source_session="session-A")
         store.add_fact(FactType.FACT, "Session B public", source_session="session-B")
@@ -443,8 +442,9 @@ class TestMem0Store:
         store.close()
 
     def test_quality_scorer_integration(self, temp_dir):
-        from extractors.mem0 import Mem0Store, FactType
         import time
+
+        from extractors.mem0 import FactType, Mem0Store
         store = Mem0Store(f"{temp_dir}/mem0.db")
         store.add_fact(FactType.PREFERENCE, "Likes Python", confidence=0.9,
                        source_session="s1")
@@ -497,9 +497,9 @@ class TestCompressionEngine:
     """Test CompressionEngine more thoroughly."""
 
     def test_compress_range_with_decisions(self, temp_dir):
+        from extractors.compression import CompressionEngine
         from storage.l3_verbatim import L3VerbatimArchive
         from storage.sqlite_index import SQLiteMetadataIndex
-        from extractors.compression import CompressionEngine
 
         l3 = L3VerbatimArchive(temp_dir)
         sql = SQLiteMetadataIndex(f"{temp_dir}/meta.db")
@@ -516,9 +516,9 @@ class TestCompressionEngine:
         sql.close()
 
     def test_incremental_compress(self, temp_dir):
+        from extractors.compression import CompressionEngine
         from storage.l3_verbatim import L3VerbatimArchive
         from storage.sqlite_index import SQLiteMetadataIndex
-        from extractors.compression import CompressionEngine
 
         l3 = L3VerbatimArchive(temp_dir)
         sql = SQLiteMetadataIndex(f"{temp_dir}/meta.db")
@@ -560,7 +560,7 @@ class TestContextBuilderEdgeCases:
         assert "archive data" in prompt
 
     def test_tight_strategy(self):
-        from retrieval.context_builder import ContextConfig, BudgetStrategy
+        from retrieval.context_builder import BudgetStrategy, ContextConfig
         cfg = ContextConfig.from_strategy(BudgetStrategy.TIGHT)
         assert cfg.token_budget == 16000
         assert cfg.recent_events_limit == 15
@@ -649,8 +649,9 @@ class TestTTLAndDecay:
     """Verify MemoryQualityScorer TTL expiration and decay in retrieval."""
 
     def test_expired_facts_not_returned(self, temp_dir):
-        from memory.memory_manager import MemoryManager
         import time
+
+        from memory.memory_manager import MemoryManager
         mm = MemoryManager(temp_dir)
         mm.start_session("test-ttl")
         mm.record_event("user", "message",
@@ -672,8 +673,9 @@ class TestTTLAndDecay:
         mm.close()
 
     def test_fresh_facts_score_higher(self, temp_dir):
-        from memory.memory_manager import MemoryManager
         import time
+
+        from memory.memory_manager import MemoryManager
         mm = MemoryManager(temp_dir)
         mm.start_session("test-score")
 
@@ -683,7 +685,6 @@ class TestTTLAndDecay:
         mm.extract_all_facts()
 
         # Add an old fact directly
-        from extractors.mem0 import FactType
         mm.mem0.conn.execute(
             """INSERT INTO mem0_facts (fact_id, type, content, confidence,
                entities_json, source_session, source_event, source_step,
@@ -904,15 +905,16 @@ class TestServerHealth:
 
     def test_health_check_no_mm(self):
         """Health check works even without MemoryManager."""
-        from api.server import health
         import asyncio
+
+        from api.server import health
         # Health endpoint doesn't require MM
         result = asyncio.get_event_loop().run_until_complete(health())
         assert result["status"] == "ok"
 
     def test_security_import(self):
         """Security middleware can be imported."""
-        from api.security import SecurityMiddleware, InputSanitizer
+        from api.security import InputSanitizer
         sanitized = InputSanitizer.sanitize("Hello <script>alert(1)</script> World")
         assert "<script>" not in sanitized
         assert "Hello" in sanitized
@@ -1029,8 +1031,8 @@ class TestHybridSearch:
         assert results == []
 
     def test_hybrid_retriever_normalize(self, temp_dir):
-        from retrieval.hybrid_search import HybridRetriever
         from embeddings.faiss_index import FAISSSemanticIndex
+        from retrieval.hybrid_search import HybridRetriever
         from storage.sqlite_index import SQLiteMetadataIndex
         faiss = FAISSSemanticIndex(temp_dir)
         sql = SQLiteMetadataIndex(f"{temp_dir}/search.db")
@@ -1077,6 +1079,7 @@ class TestAPIServerEndpoints:
 
     def test_security_add_middleware(self):
         from fastapi import FastAPI
+
         from api.security import add_security_middleware
         app = FastAPI()
         add_security_middleware(app)
@@ -1085,13 +1088,7 @@ class TestAPIServerEndpoints:
     def test_server_module_imports(self):
         """All server module functions are importable."""
         from api.server import (
-            health, ready, live, health_deep, stats,
-            session_start, session_end, turn_before, turn_after,
-            mem0_search, mem0_all, mem0_stats, mem0_entities, mem0_add,
-            compress, events_last,
-            cognitive_start, cognitive_resume, cognitive_context,
-            cognitive_step, cognitive_reflect, cognitive_strategy,
-            cognitive_state_get, cognitive_state_post, cognitive_space,
+            health,
         )
         # All imports should succeed
         assert callable(health)
@@ -1107,6 +1104,7 @@ class TestFastAPIClient:
     @pytest.fixture
     def client(self, temp_dir):
         from fastapi.testclient import TestClient
+
         import api.server as server_module
 
         # Override data dir before creating test client

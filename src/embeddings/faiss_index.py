@@ -17,9 +17,9 @@ Architecture:
 """
 import json
 import os
-import time
-import numpy as np
 from pathlib import Path
+
+import numpy as np
 
 from utils.logging import get_logger
 
@@ -231,7 +231,6 @@ class FAISSSemanticIndex:
         Returns list of {faiss_id, score, chunk_text}.
         chunk_text must be resolved via SQLite vector_map.
         """
-        import faiss
 
         index, ids = self.load_index()
         if index is None or len(ids) == 0:

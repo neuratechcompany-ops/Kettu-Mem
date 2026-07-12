@@ -9,7 +9,7 @@ Exports:
 """
 
 from storage.l3_verbatim import L3VerbatimArchive
+from storage.session_isolation import SessionIsolation, SessionNamespace
 from storage.sqlite_index import SQLiteMetadataIndex
-from storage.session_isolation import SessionNamespace, SessionIsolation
 
 __all__ = ["L3VerbatimArchive", "SQLiteMetadataIndex", "SessionNamespace", "SessionIsolation"]

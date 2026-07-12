@@ -15,10 +15,10 @@ Design principles:
 - Deduplication: merge similar facts, increase confidence
 - SQLite for structured storage, FAISS for semantic retrieval
 """
+import hashlib
 import json
 import time
 import uuid
-import hashlib
 from dataclasses import dataclass, field
 from enum import Enum
 
