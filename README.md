@@ -1,10 +1,23 @@
-# 🦊 Kettu Mem v0.2.1
+# 🦊 Kettu Mem v0.3.0
 
-**Когнитивный слой памяти для OpenClaw-агентов**
+**Context-as-a-Service — когнитивный слой памяти для AI-агентов**
+
+Автоматический ingest, семантический поиск, сборка контекста одним вызовом.
 
 ---
 
-## Что нового в v0.2.1
+## Что нового в v0.3.0
+
+| Endpoint | Назначение |
+|----------|-----------|
+| `POST /context/build` | Готовый контекст одним вызовом (facts, decisions, open_tasks, sources) |
+| `GET /mem0/search` | Поиск с фильтрами: fact_types, dedup, superseded, confidence |
+| `POST /ingest/event` | Автоматический ingest из агента (6 типов событий) |
+| `GET /status` | Диагностика: uptime, storage health, counts, memory, last_error |
+
+**Один вызов вместо 3–5.** Агент больше не собирает контекст вручную.
+
+## Что было в v0.2.1
 
 | Компонент | Статус |
 |---|---|
