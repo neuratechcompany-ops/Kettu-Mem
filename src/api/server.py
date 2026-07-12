@@ -40,40 +40,38 @@ import os
 import sys
 import time
 import uuid
-import traceback
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Optional
-from contextlib import asynccontextmanager
 
 # Add project to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from fastapi import FastAPI, Request, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
-from retrieval.context_builder import ContextConfig, BudgetStrategy
-from memory.memory_manager import MemoryManager
-from extractors.cognitive_runtime import CognitiveRuntime, MemorySpace, StepOutcome
+from api.error_buffer import ErrorRingBuffer
+from api.metrics import MetricsMiddleware, add_metrics_endpoint, metrics
 from api.security import (
-    add_security_middleware,
-    SessionStartRequest,
-    SessionEndRequest,
-    TurnBeforeRequest,
-    TurnAfterRequest,
-    CompressRequest,
-    Mem0AddRequest,
-    CognitiveStartRequest,
     CognitiveContextRequest,
-    CognitiveStepRequest,
     CognitiveReflectRequest,
     CognitiveSpaceRequest,
+    CognitiveStartRequest,
+    CognitiveStepRequest,
+    CompressRequest,
+    Mem0AddRequest,
+    SessionEndRequest,
+    SessionStartRequest,
+    TurnAfterRequest,
+    TurnBeforeRequest,
+    add_security_middleware,
 )
-from api.error_buffer import ErrorRingBuffer
-from utils.logging import add_logging_middleware, setup_logging
 from config import settings
-from api.metrics import add_metrics_endpoint, MetricsMiddleware, metrics
-from utils.logging import get_logger
+from extractors.cognitive_runtime import CognitiveRuntime, MemorySpace
+from memory.memory_manager import MemoryManager
+from retrieval.context_builder import BudgetStrategy, ContextConfig
+from utils.logging import add_logging_middleware, get_logger, setup_logging
 
 logger = get_logger("api.server")
 
@@ -198,7 +196,7 @@ async def lifespan(app: FastAPI):
     _error_buffer = ErrorRingBuffer(Path(data) / "error_buffer.json")
     metrics.set_memory_manager(_mm)
     setup_logging()
-    logger.info("server_starting", data_dir=data, version="0.3.0")
+    logger.info("server_starting", data_dir=data, version="0.3.1")
 
     yield
 
@@ -212,7 +210,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Kettu Mem",
-    version="0.2.1",
+    version="0.3.1",
     description="Cognitive Memory Layer for OpenClaw agents",
     lifespan=lifespan,
 )
@@ -327,6 +325,7 @@ async def session_end(body: SessionEndRequest):
 async def turn_before(body: TurnBeforeRequest):
     """Build context for LLM call."""
     query = body.query
+    session_id = body.session_id or (_mm._session_id if _mm else None)
     strategy_name = body.strategy
     system_prompt = body.system_prompt
     tools = body.tools
@@ -340,6 +339,7 @@ async def turn_before(body: TurnBeforeRequest):
         system_prompt=system_prompt,
         tools=tools,
         config=config,
+        session_id=session_id,
     )
 
     return {
@@ -638,13 +638,13 @@ async def status_get():
     storage_status = {"sqlite": "healthy", "faiss": "healthy", "archive": "healthy"}
     # Real check — probe each storage layer
     if _mm:
-        try: _mm.sqlite._conn.execute("SELECT 1"); 
+        try: _mm.sqlite._conn.execute("SELECT 1")
         except: storage_status["sqlite"] = "degraded"
-        try: 
+        try:
             if _mm.faiss.is_index_healthy(): pass
             else: storage_status["faiss"] = "degraded"
         except: storage_status["faiss"] = "unavailable"
-        try: 
+        try:
             sess = _mm._session_id or "check"
             _mm.l3.get_event_count(sess)
         except: storage_status["archive"] = "degraded"
@@ -683,7 +683,6 @@ async def status_get():
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     """Global error handler — safe, no traceback leak."""
-    import uuid
     rid = str(uuid.uuid4())[:8]
     logger.error("unhandled_exception", request_id=rid, error=str(exc),
                  path=str(request.url.path), exc_info=True)
@@ -705,7 +704,7 @@ def run_server(data_dir: str = None, port: int = 8765, host: str = "127.0.0.1"):
     _data_dir = data_dir or "/tmp/mm-server"
     _port = port
 
-    logger.info("server_boot", host=host, port=port, version="0.2.1")
+    logger.info("server_boot", host=host, port=port, version="0.3.1")
 
     uvicorn.run(
         "api.server:app",

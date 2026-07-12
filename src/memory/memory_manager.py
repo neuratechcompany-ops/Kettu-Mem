@@ -12,25 +12,21 @@ Architecture:
   FAISS: Semantic index (events + Mem0 facts)
   Mem0: Long-term memory (preferences, decisions, entities)
 """
-import json
 import time
-import uuid
 from pathlib import Path
 
 from utils.logging import get_logger
 
 logger = get_logger(__name__)
 
-from storage.l3_verbatim import L3VerbatimArchive
-from storage.sqlite_index import SQLiteMetadataIndex
-from storage.session_isolation import SessionIsolation, SessionNamespace
 from embeddings.faiss_index import FAISSSemanticIndex
-from retrieval.context_builder import (
-    ContextBuilder, ContextConfig, BudgetStrategy, ToolSchema
-)
 from extractors.compression import CompressionEngine
 from extractors.ingestion_filter import IngestionFilter
-from extractors.mem0 import Mem0Store, FactType
+from extractors.mem0 import FactType, Mem0Store
+from retrieval.context_builder import BudgetStrategy, ContextBuilder, ContextConfig, ToolSchema
+from storage.l3_verbatim import L3VerbatimArchive
+from storage.session_isolation import SessionIsolation, SessionNamespace
+from storage.sqlite_index import SQLiteMetadataIndex
 
 
 class MemoryManager:
@@ -276,7 +272,8 @@ class MemoryManager:
                       system_prompt: str = None,
                       tools: list[dict] = None,
                       strategy: BudgetStrategy = None,
-                      config: ContextConfig = None) -> tuple[str, dict]:
+                      config: ContextConfig = None,
+                      session_id: str = None) -> tuple[str, dict]:
         """
         Build prompt context under token budget.
 
@@ -290,6 +287,7 @@ class MemoryManager:
 
         Returns (prompt_text, stats_dict).
         """
+        sid = session_id or self._session_id
         if strategy:
             cfg = ContextConfig.from_strategy(strategy)
         else:
@@ -324,7 +322,7 @@ class MemoryManager:
 
         # 1. Recent events
         recent = self.sqlite.get_recent_events(
-            self._session_id, limit=cfg.recent_events_limit
+            sid, limit=cfg.recent_events_limit
         )
         if recent:
             builder.set_recent_events(recent)
@@ -332,7 +330,7 @@ class MemoryManager:
         # 2a. Mem0 facts (if query) — enforce session isolation
         if query:
             mem0_facts = self.mem0.search_text(query, limit=cfg.max_mem0_facts,
-                                               source_session=self._session_id)
+                                               source_session=sid)
             if mem0_facts:
                 builder.set_mem0_facts(mem0_facts)
 
@@ -344,7 +342,7 @@ class MemoryManager:
                 builder.set_semantic_results(enriched)
 
         # 2c. Summaries
-        summaries = self.sqlite.get_summaries(self._session_id)
+        summaries = self.sqlite.get_summaries(sid)
         if summaries:
             builder.set_summaries(summaries)
 
@@ -355,8 +353,8 @@ class MemoryManager:
         if stats["compression_needed"]:
             self._auto_compress(stats["utilization_pct"])
 
-        stats["session_id"] = self._session_id
-        stats["total_events_archived"] = self.l3.get_event_count(self._session_id)
+        stats["session_id"] = sid
+        stats["total_events_archived"] = self.l3.get_event_count(sid)
         stats["mem0_facts_total"] = self.mem0.get_stats()["total_facts"]
 
         return prompt, stats
