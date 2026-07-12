@@ -404,7 +404,8 @@ class MemoryManager:
             faiss_id = fr["faiss_id"]
             if sid:
                 vector_rows = self.sqlite.conn.execute(
-                    "SELECT event_id, chunk_text FROM vector_map WHERE faiss_id = ? AND session_id = ?",
+                    "SELECT event_id, chunk_text FROM vector_map WHERE faiss_id = ?
+                    AND session_id = ?",
                     (faiss_id, sid),
                 ).fetchall()
             else:

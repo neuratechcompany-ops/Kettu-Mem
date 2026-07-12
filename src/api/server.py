@@ -192,7 +192,10 @@ def _run_healthcheck() -> list[dict]:
             {
                 "layer": "cognitive",
                 "status": "ok",
-                "detail": f'goal={bool(state.get("planning",{}).get("goal"))}, steps={state.get("step_counter",0)}',
+                "detail": (
+                    f"goal={bool(state.get('planning',{}).get('goal'))},"
+                    f" steps={state.get('step_counter',0)}"
+                ),
             }
         )
     except Exception as e:
