@@ -174,7 +174,7 @@ def _run_healthcheck() -> list[dict]:
 
     # 6. Mem0
     try:
-        facts = _mm.mem0.get_all(limit=1)
+        _mm.mem0.get_all(limit=1)
         checks.append(
             {
                 "layer": "mem0",
@@ -594,14 +594,13 @@ async def context_build(request: Request):
     try:
         body = await request.json()
         query = body.get("query", "")
-        session_id = body.get("session_id")
+        body.get("session_id")
         project = body.get("project", "default")
         token_budget = body.get("token_budget", 4000)
         fact_types = body.get("fact_types", [])
         min_confidence = body.get("min_confidence", 0.6)
-    except:
+    except Exception:
         query = ""
-        session_id = None
         project = "default"
         token_budget = 4000
         fact_types = []
@@ -640,7 +639,7 @@ async def context_build(request: Request):
                         open_tasks.append(f)
                 if f.get("source"):
                     sources.append(f["source"])
-        except:
+        except Exception:
             pass
 
     return {
@@ -665,7 +664,7 @@ async def ingest_event(request: Request):
         event_type = body.get("event_type", "unknown")
         content = body.get("content", "")
         metadata = body.get("metadata", {})
-    except:
+    except Exception:
         return {"status": "error", "message": "invalid body"}
 
     if not _mm:
@@ -716,19 +715,19 @@ async def status_get():
     if _mm:
         try:
             _mm.sqlite._conn.execute("SELECT 1")
-        except:
+        except Exception:
             storage_status["sqlite"] = "degraded"
         try:
             if _mm.faiss.is_index_healthy():
                 pass
             else:
                 storage_status["faiss"] = "degraded"
-        except:
+        except Exception:
             storage_status["faiss"] = "unavailable"
         try:
             sess = _mm._session_id or "check"
             _mm.l3.get_event_count(sess)
-        except:
+        except Exception:
             storage_status["archive"] = "degraded"
     counts = {"facts": 0, "sessions": 0, "vectors": 0, "archive_events": 0}
     last_ingest = None
@@ -740,13 +739,13 @@ async def status_get():
             counts["vectors"] = (
                 _mm.mem0._collection.count() if hasattr(_mm.mem0, "_collection") else 0
             )
-        except:
+        except Exception:
             pass
         try:
             import psutil
 
             mem_usage = psutil.Process().memory_info().rss // (1024 * 1024)
-        except:
+        except Exception:
             pass
 
     if _cr and _cr.last_ingest_at:
