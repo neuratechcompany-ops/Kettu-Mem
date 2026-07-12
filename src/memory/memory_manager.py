@@ -20,6 +20,7 @@ from utils.logging import get_logger
 
 logger = get_logger(__name__)
 
+# ruff: noqa: E402
 from embeddings.faiss_index import FAISSSemanticIndex
 from extractors.compression import CompressionEngine
 from extractors.ingestion_filter import IngestionFilter
@@ -28,8 +29,6 @@ from retrieval.context_builder import BudgetStrategy, ContextBuilder, ContextCon
 from storage.l3_verbatim import L3VerbatimArchive
 from storage.session_isolation import SessionIsolation, SessionNamespace
 from storage.sqlite_index import SQLiteMetadataIndex
-
-
 class MemoryManager:
     """
     Full MemoryManager with all 6 layers.
@@ -403,10 +402,12 @@ class MemoryManager:
         for fr in faiss_results:
             faiss_id = fr["faiss_id"]
             if sid:
+                sql = (
+                    "SELECT event_id, chunk_text FROM vector_map "
+                    "WHERE faiss_id = ? AND session_id = ?"
+                )
                 vector_rows = self.sqlite.conn.execute(
-                    "SELECT event_id, chunk_text FROM vector_map WHERE faiss_id = ?
-                    AND session_id = ?",
-                    (faiss_id, sid),
+                    sql, (faiss_id, sid)
                 ).fetchall()
             else:
                 vector_rows = self.sqlite.conn.execute(
@@ -530,10 +531,11 @@ class MemoryManager:
 
         # Update vector_map
         for i, (chunk, faiss_id) in enumerate(zip(texts, ids)):
-            self.sqlite.conn.execute(
-                "INSERT INTO vector_map (event_id, session_id, faiss_id, chunk_text) VALUES (?, ?, ?, ?)",
-                (f"idx-{i}", sid, faiss_id, chunk),
+            sql = (
+                "INSERT INTO vector_map (event_id, session_id, "
+                "faiss_id, chunk_text) VALUES (?, ?, ?, ?)"
             )
+            self.sqlite.conn.execute(sql, (f"idx-{i}", sid, faiss_id, chunk))
         self.sqlite.conn.commit()
 
         logger.info("index_rebuilt", vectors=len(texts), latency_ms=round(elapsed, 0))
