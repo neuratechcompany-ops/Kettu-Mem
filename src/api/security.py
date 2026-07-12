@@ -155,6 +155,8 @@ class APIKeyAuth:
         self.api_key = api_key or _get_api_key()
         if not self.api_key:
             self.api_key = None  # будет прочитан при первом запросе
+            if self.api_key is None:
+                self._enabled = False
 
 
 # ── Rate Limiter ────────────────────────────────────────

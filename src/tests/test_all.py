@@ -1054,7 +1054,7 @@ class TestServerHealth:
         from api.server import app
 
         assert app.title == "Kettu Mem"
-        assert app.version == "0.2.1"
+        assert app.version == "0.3.1"
 
     def test_health_check_no_mm(self):
         """Health check works even without MemoryManager."""
@@ -1238,7 +1238,7 @@ class TestAPIServerEndpoints:
         from api.server import app
 
         assert app.title == "Kettu Mem"
-        assert app.version == "0.2.1"
+        assert app.version == "0.3.1"
 
     def test_routes_registered(self):
         from api.server import app
