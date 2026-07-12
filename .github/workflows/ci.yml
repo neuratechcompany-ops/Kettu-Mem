@@ -51,7 +51,10 @@ jobs:
       - name: Docker smoke
         run: |
           docker run -d --name kettu-test -p 18765:8765 kettu-mem:test
-          sleep 5
+          for i in $(seq 1 10); do
+            sleep 3
+            curl -fsS http://localhost:18765/health && break || echo "retry $i..."
+          done
           curl -fsS http://localhost:18765/health | grep ok
           curl -fsS http://localhost:18765/status
           docker stop kettu-test
