@@ -1,1 +1,6 @@
-{"version": "0.2.1", "status": "stable", "date": "2026-07-09", "codename": "Security + Validation Hotfix"}
+{
+  "version": "0.3.0",
+  "status": "stable",
+  "date": "2026-07-12",
+  "codename": "Context-as-a-Service"
+}
