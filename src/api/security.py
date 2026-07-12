@@ -151,8 +151,10 @@ class APIKeyAuth:
     """API Key authentication middleware."""
 
     def __init__(self, api_key: str = None):
+        self._enabled = True
         self.api_key = api_key or _get_api_key()
-        self.api_key = None  # будет прочитан при первом запросе
+        if not self.api_key:
+            self.api_key = None  # будет прочитан при первом запросе
 
 
 # ── Rate Limiter ────────────────────────────────────────
