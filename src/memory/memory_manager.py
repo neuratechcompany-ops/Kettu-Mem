@@ -29,6 +29,8 @@ from retrieval.context_builder import BudgetStrategy, ContextBuilder, ContextCon
 from storage.l3_verbatim import L3VerbatimArchive
 from storage.session_isolation import SessionIsolation, SessionNamespace
 from storage.sqlite_index import SQLiteMetadataIndex
+
+
 class MemoryManager:
     """
     Full MemoryManager with all 6 layers.
@@ -406,9 +408,7 @@ class MemoryManager:
                     "SELECT event_id, chunk_text FROM vector_map "
                     "WHERE faiss_id = ? AND session_id = ?"
                 )
-                vector_rows = self.sqlite.conn.execute(
-                    sql, (faiss_id, sid)
-                ).fetchall()
+                vector_rows = self.sqlite.conn.execute(sql, (faiss_id, sid)).fetchall()
             else:
                 vector_rows = self.sqlite.conn.execute(
                     "SELECT event_id, chunk_text FROM vector_map WHERE faiss_id = ?", (faiss_id,)
