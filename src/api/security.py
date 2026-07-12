@@ -47,7 +47,8 @@ class TurnBeforeRequest(BaseModel):
     strategy: str = Field(default="normal", max_length=32)
     system_prompt: Optional[str] = Field(default=None, max_length=16384)
     tools: list[dict] = Field(default_factory=list)
-    token_budget: Optional[int] = Field(default=None, ge=100, le=256000)
+    session_id: Optional[str] = None
+    token_budget: Optional[int] = Field(default=None, ge=256, le=128000)
 
     @field_validator("query")
     @classmethod
@@ -58,6 +59,7 @@ class TurnBeforeRequest(BaseModel):
 class TurnAfterRequest(BaseModel):
     events: list[dict] = Field(..., min_length=1)
     extract_facts: bool = True
+    session_id: Optional[str] = None
 
 
 class CompressRequest(BaseModel):
