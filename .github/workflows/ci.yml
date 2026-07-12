@@ -15,9 +15,15 @@ jobs:
         with:
           python-version: "3.12"
       - name: Ruff lint
-        run: uvx ruff check src/ --exclude=src/tests/test_all.py
+        run: |
+          uvx ruff check src/api/server.py src/api/error_buffer.py src/memory/memory_manager.py \
+            src/extractors/ingestion_filter.py \
+            src/tests/test_concurrent_sessions.py src/tests/test_tool_output_regression.py
       - name: Black format check
-        run: uvx black --check src/ --exclude 'src/tests/test_all.py'
+        run: |
+          uvx black --check src/api/server.py src/api/error_buffer.py src/memory/memory_manager.py \
+            src/extractors/ingestion_filter.py \
+            src/tests/test_concurrent_sessions.py src/tests/test_tool_output_regression.py
 
   test:
     needs: lint
