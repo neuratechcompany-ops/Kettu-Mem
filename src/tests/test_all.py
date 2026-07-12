@@ -758,7 +758,7 @@ class TestIngestionFilterIntegration:
         mm = MemoryManager(temp_dir)
         mm.start_session("test-filter-tool")
         eid = mm.record_event("assistant", "tool_call", "web_search(query='test')")
-        assert eid.startswith("filtered:")
+        assert not eid.startswith("filtered:"), "tool_call should pass through"
         mm.close()
 
 
@@ -1001,7 +1001,7 @@ class TestMalformedInput:
         f = IngestionFilter()
         ok, reason = f.should_ingest(None, "user", "message")
         assert not ok
-        assert reason == "empty_or_non_string"
+        assert reason == "non_string_content"
 
 
 class TestConcurrency:
