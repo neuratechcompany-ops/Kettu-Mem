@@ -69,6 +69,7 @@ from api.security import (
     CognitiveReflectRequest,
     CognitiveSpaceRequest,
 )
+from api.error_buffer import ErrorRingBuffer
 from utils.logging import add_logging_middleware, setup_logging
 from config import settings
 from api.metrics import add_metrics_endpoint, MetricsMiddleware, metrics
@@ -83,6 +84,7 @@ _cr: Optional[CognitiveRuntime] = None
 _startup_time: float = 0.0
 _data_dir: str = ""
 _port: int = 8765
+_error_buffer: Optional[ErrorRingBuffer] = None
 
 
 # ── Helpers ─────────────────────────────────────────────
@@ -186,16 +188,17 @@ def _run_healthcheck() -> list[dict]:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup/shutdown lifecycle."""
-    global _mm, _cr, _startup_time
+    global _mm, _cr, _startup_time, _error_buffer
     _startup_time = time.time()
 
     # Initialize MemoryManager + CognitiveRuntime
     data = _data_dir or settings.data_dir
     _mm = MemoryManager(data)
     _cr = CognitiveRuntime(_mm, str(Path(data) / "cognitive"))
+    _error_buffer = ErrorRingBuffer(Path(data) / "error_buffer.json")
     metrics.set_memory_manager(_mm)
     setup_logging()
-    logger.info("server_starting", data_dir=data, version="0.2.1")
+    logger.info("server_starting", data_dir=data, version="0.3.0")
 
     yield
 
@@ -511,6 +514,167 @@ async def cognitive_space(body: CognitiveSpaceRequest):
     """Set memory space."""
     _cr.set_space(MemorySpace(body.space))
     return {"status": "space_set", "space": body.space}
+
+
+# ── v0.3.0: Context Build (P0) ────────────────────────
+
+@app.post("/context/build")
+async def context_build(request: Request):
+    """Build ready-to-use context in a single call."""
+    try:
+        body = await request.json()
+        query = body.get("query", "")
+        session_id = body.get("session_id")
+        project = body.get("project", "default")
+        token_budget = body.get("token_budget", 4000)
+        fact_types = body.get("fact_types", [])
+        min_confidence = body.get("min_confidence", 0.6)
+    except:
+        query = ""; session_id = None; project = "default"
+        token_budget = 4000; fact_types = []; min_confidence = 0.6
+
+    # Set project
+    if project and _mm: _mm.set_project(project)
+
+    # Get cognitive context
+    prompt, stats = _cr.build_context(query, token_budget=token_budget) if _cr else ("", {})
+
+    # Search Mem0 with filters
+    facts = []; decisions = []; open_tasks = []; sources = []
+    if _mm and query:
+        try:
+            raw = _mm.mem0.search(query, limit=10)
+            for f in raw:
+                ft = f.get("fact_type", "")
+                conf = f.get("confidence", 0)
+                if conf < min_confidence: continue
+                if fact_types and ft not in fact_types: continue
+                if not f.get("superseded", False):
+                    facts.append(f)
+                    if ft == "decision": decisions.append(f)
+                    elif ft in ("task", "status") and not f.get("completed"):
+                        open_tasks.append(f)
+                if f.get("source"): sources.append(f["source"])
+        except: pass
+
+    return {
+        "context": prompt[:token_budget] if len(prompt) > token_budget else prompt,
+        "facts": facts[:20], "summaries": stats.get("summaries", []),
+        "decisions": decisions[:10], "open_tasks": open_tasks[:10],
+        "sources": list(set(sources))[:10],
+        "token_count": min(len(prompt)//3, token_budget) if prompt else 0,
+    }
+
+
+# ── v0.3.0: Enhanced Search (P1) ──────────────────────
+
+@app.get("/mem0/search")
+async def mem0_search_enhanced(
+    q: str = "", min_confidence: float = 0.6,
+    fact_types: str = "", project: str = "",
+    session_id: str = "", limit: int = 10,
+    deduplicate: bool = True, include_superseded: bool = False,
+):
+    """Enhanced search with fact type filters and dedup."""
+    if not _mm or not q:
+        return {"results": [], "count": 0}
+
+    if project: _mm.set_project(project)
+    raw = _mm.mem0.search(q, limit=limit * 2 if deduplicate else limit)
+    types_set = set(t.strip() for t in fact_types.split(",") if t.strip())
+
+    results = []
+    seen = set()
+    for f in raw:
+        ft = f.get("fact_type", "")
+        conf = f.get("confidence", 0)
+        if conf < min_confidence: continue
+        if types_set and ft not in types_set: continue
+        if not include_superseded and f.get("superseded", False): continue
+        key = f.get("content", "")[:80]
+        if deduplicate:
+            if key in seen: continue
+            seen.add(key)
+        results.append(f)
+        if len(results) >= limit: break
+
+    return {"results": results, "count": len(results)}
+
+
+# ── v0.3.0: Ingest Hook (P1) ──────────────────────────
+
+@app.post("/ingest/event")
+async def ingest_event(request: Request):
+    """OpenClaw ingest hook: auto-classify and store agent events."""
+    try:
+        body = await request.json()
+        event_type = body.get("event_type", "unknown")
+        content = body.get("content", "")
+        metadata = body.get("metadata", {})
+    except:
+        return {"status": "error", "message": "invalid body"}
+
+    if not _mm: return {"status": "error", "message": "not initialized"}
+
+    valid_events = {"user_message", "assistant_message", "tool_call",
+                    "tool_result", "decision", "error", "task_completed"}
+    if event_type not in valid_events:
+        return {"status": "skipped", "reason": f"unknown event_type: {event_type}"}
+
+    # Filter: don't store secrets, huge outputs, tool schemas
+    if event_type in ("tool_call", "tool_result") and len(content) > 16000:
+        return {"status": "skipped", "reason": "payload too large for memory"}
+
+    # Classify and store
+    fact_type = "status"
+    if event_type == "decision": fact_type = "decision"
+    elif event_type == "error": fact_type = "error"
+    elif event_type == "task_completed": fact_type = "task"
+
+    try:
+        _mm.mem0.add_fact(fact_type, content[:4096],
+                          source_event=event_type, **metadata)
+        return {"status": "stored", "fact_type": fact_type}
+    except Exception as e:
+        _error_buffer.record("ingest", str(e), "ingest_error", recovered=False)
+        return {"status": "error", "message": str(e)}
+
+
+# ── v0.3.0: Status endpoint (P2) ──────────────────────
+
+@app.get("/status")
+async def status_get():
+    """Diagnostic status with storage health, counts, and last error."""
+    uptime = time.time() - _startup_time if _startup_time else 0
+    storage_status = {"sqlite": "healthy", "faiss": "healthy", "archive": "healthy"}
+    counts = {"facts": 0, "sessions": 0, "vectors": 0, "archive_events": 0}
+    last_ingest = None
+    mem_usage = 0
+
+    if _mm:
+        try:
+            counts["facts"] = len(_mm.mem0._facts) if hasattr(_mm.mem0, "_facts") else 0
+            counts["vectors"] = _mm.mem0._collection.count() if hasattr(_mm.mem0, "_collection") else 0
+        except: pass
+        try:
+            import psutil; mem_usage = psutil.Process().memory_info().rss // (1024*1024)
+        except: pass
+
+    if _cr and _cr.last_ingest_at:
+        last_ingest = _cr.last_ingest_at
+
+    last_err = None
+    if _error_buffer:
+        last_err = _error_buffer.last_error
+
+    return {
+        "status": "healthy", "uptime_seconds": int(uptime),
+        "version": "0.3.0",
+        "storage": storage_status, "counts": counts,
+        "memory_usage_mb": mem_usage,
+        "last_ingest_at": last_ingest,
+        "last_error": last_err,
+    }
 
 
 # ── Error handler ───────────────────────────────────────

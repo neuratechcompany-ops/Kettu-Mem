@@ -227,7 +227,7 @@ class RateLimiter:
 # ── Security Middleware (combined) ──────────────────────
 
 # Public endpoints (no API key required)
-PUBLIC_PATHS = {"/health", "/ready", "/live", "/health/deep", "/metrics"}
+PUBLIC_PATHS = {"/health", "/ready", "/live", "/health/deep", "/metrics", "/status"}
 
 
 class SecurityMiddleware(BaseHTTPMiddleware):
