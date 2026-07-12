@@ -35,6 +35,7 @@ Production REST endpoints for OpenClaw agent loop integration:
 
 All endpoints maintain backward compatibility with v0.1.0 response format.
 """
+
 import json
 import os
 import sys
@@ -87,6 +88,7 @@ _error_buffer: Optional[ErrorRingBuffer] = None
 
 # ── Helpers ─────────────────────────────────────────────
 
+
 def _search_archive(query: str, limit: int = 10) -> list[dict]:
     """Full-text search in L3 archive events (for decision recovery)."""
     if not _mm or not _mm._session_id:
@@ -97,13 +99,15 @@ def _search_archive(query: str, limit: int = 10) -> list[dict]:
     for e in reversed(events):
         content_lower = e.get("content", "").lower()
         if all(w in content_lower for w in q_words):
-            hits.append({
-                "step": e["step_id"],
-                "role": e["role"],
-                "type": e["type"],
-                "content": e["content"][:300],
-                "timestamp": e["timestamp"],
-            })
+            hits.append(
+                {
+                    "step": e["step_id"],
+                    "role": e["role"],
+                    "type": e["type"],
+                    "content": e["content"][:300],
+                    "timestamp": e["timestamp"],
+                }
+            )
             if len(hits) >= limit:
                 break
     return hits
@@ -112,6 +116,7 @@ def _search_archive(query: str, limit: int = 10) -> list[dict]:
 def _run_healthcheck() -> list[dict]:
     """Run comprehensive health check across all layers."""
     import sqlite3
+
     checks = []
 
     # 1. API layer
@@ -155,8 +160,13 @@ def _run_healthcheck() -> list[dict]:
     try:
         stats = _mm.faiss.get_index_stats()
         if stats.get("exists"):
-            checks.append({"layer": "faiss", "status": "ok",
-                          "detail": f'{stats["count"]} vectors, dim={stats["dim"]}'})
+            checks.append(
+                {
+                    "layer": "faiss",
+                    "status": "ok",
+                    "detail": f'{stats["count"]} vectors, dim={stats["dim"]}',
+                }
+            )
         else:
             checks.append({"layer": "faiss", "status": "ok", "detail": "empty (no index yet)"})
     except Exception as e:
@@ -165,16 +175,26 @@ def _run_healthcheck() -> list[dict]:
     # 6. Mem0
     try:
         facts = _mm.mem0.get_all(limit=1)
-        checks.append({"layer": "mem0", "status": "ok",
-                      "detail": f'{_mm.mem0.get_stats()["total_facts"]} facts'})
+        checks.append(
+            {
+                "layer": "mem0",
+                "status": "ok",
+                "detail": f'{_mm.mem0.get_stats()["total_facts"]} facts',
+            }
+        )
     except Exception as e:
         checks.append({"layer": "mem0", "status": "fail", "detail": str(e)[:200]})
 
     # 7. Cognitive
     try:
         state = _cr.get_state() if _cr else {}
-        checks.append({"layer": "cognitive", "status": "ok",
-                      "detail": f'goal={bool(state.get("planning",{}).get("goal"))}, steps={state.get("step_counter",0)}'})
+        checks.append(
+            {
+                "layer": "cognitive",
+                "status": "ok",
+                "detail": f'goal={bool(state.get("planning",{}).get("goal"))}, steps={state.get("step_counter",0)}',
+            }
+        )
     except Exception as e:
         checks.append({"layer": "cognitive", "status": "fail", "detail": str(e)[:200]})
 
@@ -182,6 +202,7 @@ def _run_healthcheck() -> list[dict]:
 
 
 # ── Application lifecycle ───────────────────────────────
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -237,10 +258,15 @@ add_metrics_endpoint(app)
 
 # ── Health endpoints ────────────────────────────────────
 
+
 @app.get("/health")
 async def health():
     """Liveness: always returns ok if the process is running."""
-    return {"status": "ok", "session": _mm._session_id if _mm else None, "uptime": round(time.time() - _startup_time, 1)}
+    return {
+        "status": "ok",
+        "session": _mm._session_id if _mm else None,
+        "uptime": round(time.time() - _startup_time, 1),
+    }
 
 
 @app.get("/ready")
@@ -283,6 +309,7 @@ async def health_deep():
 
 # ── Stats ───────────────────────────────────────────────
 
+
 @app.get("/stats")
 async def stats():
     """Full statistics across all layers."""
@@ -292,6 +319,7 @@ async def stats():
 
 
 # ── Session management ──────────────────────────────────
+
 
 @app.post("/session/start")
 async def session_start(body: SessionStartRequest):
@@ -321,6 +349,7 @@ async def session_end(body: SessionEndRequest):
 
 # ── Turn endpoints ──────────────────────────────────────
 
+
 @app.post("/turn/before")
 async def turn_before(body: TurnBeforeRequest):
     """Build context for LLM call."""
@@ -332,7 +361,9 @@ async def turn_before(body: TurnBeforeRequest):
     budget = body.token_budget
 
     strategy = getattr(BudgetStrategy, strategy_name.upper(), BudgetStrategy.NORMAL)
-    config = ContextConfig.from_strategy(strategy) if not budget else ContextConfig(token_budget=budget)
+    config = (
+        ContextConfig.from_strategy(strategy) if not budget else ContextConfig(token_budget=budget)
+    )
 
     prompt, stats = _mm.build_context(
         query=query,
@@ -381,6 +412,7 @@ async def turn_after(body: TurnAfterRequest):
 
 # ── Compression ─────────────────────────────────────────
 
+
 @app.post("/compress")
 async def compress(body: CompressRequest):
     """Manual compression."""
@@ -389,6 +421,7 @@ async def compress(body: CompressRequest):
 
 
 # ── Events ──────────────────────────────────────────────
+
 
 @app.get("/events/last")
 async def events_last(request: Request):
@@ -400,18 +433,24 @@ async def events_last(request: Request):
 
 # ── Mem0 endpoints ──────────────────────────────────────
 
+
 @app.get("/mem0/search")
 async def mem0_search(
-    q: str = "", min_confidence: float = 0.6,
-    fact_types: str = "", project: str = "",
-    session_id: str = "", limit: int = 10,
-    deduplicate: bool = True, include_superseded: bool = False,
+    q: str = "",
+    min_confidence: float = 0.6,
+    fact_types: str = "",
+    project: str = "",
+    session_id: str = "",
+    limit: int = 10,
+    deduplicate: bool = True,
+    include_superseded: bool = False,
 ):
     """Search with fact type filters, dedup, and superseded handling."""
     if not _mm or not q:
         return {"query": q, "results": [], "archive_hits": [], "count": 0, "archive_count": 0}
 
-    if project: setattr(_mm, "_project", project)  # soft project isolation
+    if project:
+        setattr(_mm, "_project", project)  # soft project isolation
     raw = _mm.get_mem0_context(q, limit * 2 if deduplicate else limit)
     archive_hits = _search_archive(q, limit) if _mm else []
     types_set = set(t.strip() for t in fact_types.split(",") if t.strip())
@@ -421,19 +460,27 @@ async def mem0_search(
     for f in raw:
         ft = f.get("fact_type", "")
         conf = f.get("confidence", 0)
-        if conf < min_confidence: continue
-        if types_set and ft not in types_set: continue
-        if not include_superseded and f.get("superseded", False): continue
+        if conf < min_confidence:
+            continue
+        if types_set and ft not in types_set:
+            continue
+        if not include_superseded and f.get("superseded", False):
+            continue
         key = f.get("content", "")[:80]
         if deduplicate:
-            if key in seen: continue
+            if key in seen:
+                continue
             seen.add(key)
         results.append(f)
-        if len(results) >= limit: break
+        if len(results) >= limit:
+            break
 
     return {
-        "query": q, "results": results, "archive_hits": archive_hits,
-        "count": len(results), "archive_count": len(archive_hits),
+        "query": q,
+        "results": results,
+        "archive_hits": archive_hits,
+        "count": len(results),
+        "archive_count": len(archive_hits),
     }
 
 
@@ -466,12 +513,12 @@ async def mem0_add(body: Mem0AddRequest):
     content = body.content
     confidence = body.confidence
     entities = body.entities
-    fact = _mm.add_mem0_fact(fact_type, content,
-                             confidence=confidence, entities=entities)
+    fact = _mm.add_mem0_fact(fact_type, content, confidence=confidence, entities=entities)
     return {"status": "added", "fact": fact.to_dict()}
 
 
 # ── Cognitive Runtime endpoints ─────────────────────────
+
 
 @app.post("/cognitive/start")
 async def cognitive_start(body: CognitiveStartRequest):
@@ -540,6 +587,7 @@ async def cognitive_space(body: CognitiveSpaceRequest):
 
 # ── v0.3.0: Context Build (P0) ────────────────────────
 
+
 @app.post("/context/build")
 async def context_build(request: Request):
     """Build ready-to-use context in a single call."""
@@ -552,45 +600,62 @@ async def context_build(request: Request):
         fact_types = body.get("fact_types", [])
         min_confidence = body.get("min_confidence", 0.6)
     except:
-        query = ""; session_id = None; project = "default"
-        token_budget = 4000; fact_types = []; min_confidence = 0.6
+        query = ""
+        session_id = None
+        project = "default"
+        token_budget = 4000
+        fact_types = []
+        min_confidence = 0.6
 
     # Set project (safe — wraps missing method)
     if project and _mm:
-        try: _mm.set_project(project)
-        except AttributeError: pass
+        try:
+            _mm.set_project(project)
+        except AttributeError:
+            pass
 
     # Get cognitive context
     prompt, stats = _cr.build_context(query, token_budget=token_budget) if _cr else ("", {})
 
     # Search Mem0 with filters
-    facts = []; decisions = []; open_tasks = []; sources = []
+    facts = []
+    decisions = []
+    open_tasks = []
+    sources = []
     if _mm and query:
         try:
             raw = _mm.mem0.search(query, limit=10)
             for f in raw:
                 ft = f.get("fact_type", "")
                 conf = f.get("confidence", 0)
-                if conf < min_confidence: continue
-                if fact_types and ft not in fact_types: continue
+                if conf < min_confidence:
+                    continue
+                if fact_types and ft not in fact_types:
+                    continue
                 if not f.get("superseded", False):
                     facts.append(f)
-                    if ft == "decision": decisions.append(f)
+                    if ft == "decision":
+                        decisions.append(f)
                     elif ft in ("task", "status") and not f.get("completed"):
                         open_tasks.append(f)
-                if f.get("source"): sources.append(f["source"])
-        except: pass
+                if f.get("source"):
+                    sources.append(f["source"])
+        except:
+            pass
 
     return {
         "context": prompt[:token_budget] if len(prompt) > token_budget else prompt,
-        "facts": facts[:20], "summaries": stats.get("summaries", []),
-        "decisions": decisions[:10], "open_tasks": open_tasks[:10],
+        "facts": facts[:20],
+        "summaries": stats.get("summaries", []),
+        "decisions": decisions[:10],
+        "open_tasks": open_tasks[:10],
         "sources": list(set(sources))[:10],
-        "token_count": min(len(prompt)//3, token_budget) if prompt else 0,
+        "token_count": min(len(prompt) // 3, token_budget) if prompt else 0,
     }
 
 
 # ── v0.3.0: Ingest Hook (P1) ──────────────────────────
+
 
 @app.post("/ingest/event")
 async def ingest_event(request: Request):
@@ -603,10 +668,18 @@ async def ingest_event(request: Request):
     except:
         return {"status": "error", "message": "invalid body"}
 
-    if not _mm: return {"status": "error", "message": "not initialized"}
+    if not _mm:
+        return {"status": "error", "message": "not initialized"}
 
-    valid_events = {"user_message", "assistant_message", "tool_call",
-                    "tool_result", "decision", "error", "task_completed"}
+    valid_events = {
+        "user_message",
+        "assistant_message",
+        "tool_call",
+        "tool_result",
+        "decision",
+        "error",
+        "task_completed",
+    }
     if event_type not in valid_events:
         return {"status": "skipped", "reason": f"unknown event_type: {event_type}"}
 
@@ -616,13 +689,15 @@ async def ingest_event(request: Request):
 
     # Classify and store
     fact_type = "status"
-    if event_type == "decision": fact_type = "decision"
-    elif event_type == "error": fact_type = "error"
-    elif event_type == "task_completed": fact_type = "task"
+    if event_type == "decision":
+        fact_type = "decision"
+    elif event_type == "error":
+        fact_type = "error"
+    elif event_type == "task_completed":
+        fact_type = "task"
 
     try:
-        _mm.mem0.add_fact(fact_type, content[:4096],
-                          source_event=event_type, **metadata)
+        _mm.mem0.add_fact(fact_type, content[:4096], source_event=event_type, **metadata)
         return {"status": "stored", "fact_type": fact_type}
     except Exception as e:
         _error_buffer.record("ingest", str(e), "ingest_error", recovered=False)
@@ -631,6 +706,7 @@ async def ingest_event(request: Request):
 
 # ── v0.3.0: Status endpoint (P2) ──────────────────────
 
+
 @app.get("/status")
 async def status_get():
     """Diagnostic status with storage health, counts, and last error."""
@@ -638,16 +714,22 @@ async def status_get():
     storage_status = {"sqlite": "healthy", "faiss": "healthy", "archive": "healthy"}
     # Real check — probe each storage layer
     if _mm:
-        try: _mm.sqlite._conn.execute("SELECT 1")
-        except: storage_status["sqlite"] = "degraded"
         try:
-            if _mm.faiss.is_index_healthy(): pass
-            else: storage_status["faiss"] = "degraded"
-        except: storage_status["faiss"] = "unavailable"
+            _mm.sqlite._conn.execute("SELECT 1")
+        except:
+            storage_status["sqlite"] = "degraded"
+        try:
+            if _mm.faiss.is_index_healthy():
+                pass
+            else:
+                storage_status["faiss"] = "degraded"
+        except:
+            storage_status["faiss"] = "unavailable"
         try:
             sess = _mm._session_id or "check"
             _mm.l3.get_event_count(sess)
-        except: storage_status["archive"] = "degraded"
+        except:
+            storage_status["archive"] = "degraded"
     counts = {"facts": 0, "sessions": 0, "vectors": 0, "archive_events": 0}
     last_ingest = None
     mem_usage = 0
@@ -655,11 +737,17 @@ async def status_get():
     if _mm:
         try:
             counts["facts"] = len(_mm.mem0._facts) if hasattr(_mm.mem0, "_facts") else 0
-            counts["vectors"] = _mm.mem0._collection.count() if hasattr(_mm.mem0, "_collection") else 0
-        except: pass
+            counts["vectors"] = (
+                _mm.mem0._collection.count() if hasattr(_mm.mem0, "_collection") else 0
+            )
+        except:
+            pass
         try:
-            import psutil; mem_usage = psutil.Process().memory_info().rss // (1024*1024)
-        except: pass
+            import psutil
+
+            mem_usage = psutil.Process().memory_info().rss // (1024 * 1024)
+        except:
+            pass
 
     if _cr and _cr.last_ingest_at:
         last_ingest = _cr.last_ingest_at
@@ -669,9 +757,11 @@ async def status_get():
         last_err = _error_buffer.last_error
 
     return {
-        "status": "healthy", "uptime_seconds": int(uptime),
+        "status": "healthy",
+        "uptime_seconds": int(uptime),
         "version": "0.3.0",
-        "storage": storage_status, "counts": counts,
+        "storage": storage_status,
+        "counts": counts,
         "memory_usage_mb": mem_usage,
         "last_ingest_at": last_ingest,
         "last_error": last_err,
@@ -680,12 +770,18 @@ async def status_get():
 
 # ── Error handler ───────────────────────────────────────
 
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     """Global error handler — safe, no traceback leak."""
     rid = str(uuid.uuid4())[:8]
-    logger.error("unhandled_exception", request_id=rid, error=str(exc),
-                 path=str(request.url.path), exc_info=True)
+    logger.error(
+        "unhandled_exception",
+        request_id=rid,
+        error=str(exc),
+        path=str(request.url.path),
+        exc_info=True,
+    )
     if _error_buffer:
         _error_buffer.record("server", str(exc)[:200], "unhandled", rid)
     return JSONResponse(
@@ -695,6 +791,7 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 
 # ── Entry point ─────────────────────────────────────────
+
 
 def run_server(data_dir: str = None, port: int = 8765, host: str = "127.0.0.1"):
     """Run the FastAPI server with uvicorn."""
@@ -717,6 +814,7 @@ def run_server(data_dir: str = None, port: int = 8765, host: str = "127.0.0.1"):
 
 if __name__ == "__main__":
     import argparse
+
     parser = argparse.ArgumentParser(description="Kettu Mem v0.3.1")
     parser.add_argument("--data-dir", default="/tmp/mm-server")
     parser.add_argument("--port", type=int, default=8765)

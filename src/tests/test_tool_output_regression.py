@@ -1,5 +1,7 @@
 """Regression test: tool outputs MUST remain text, never filtered."""
+
 import pytest
+
 from extractors.ingestion_filter import IngestionFilter
 
 
@@ -38,7 +40,9 @@ class TestToolOutputPassthrough:
         assert ok
 
     def test_ansi_escape_passthrough(self, filt):
-        ok, _ = filt.should_ingest("\x1b[32mPASSED\x1b[0m\n\x1b[31mFAILED\x1b[0m", "tool", "tool_output")
+        ok, _ = filt.should_ingest(
+            "\x1b[32mPASSED\x1b[0m\n\x1b[31mFAILED\x1b[0m", "tool", "tool_output"
+        )
         assert ok
 
     def test_pytest_output_passthrough(self, filt):

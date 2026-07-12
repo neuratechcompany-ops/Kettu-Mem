@@ -4,9 +4,9 @@ Full session isolation requires per-session step_counter (v0.3.2).
 See: https://github.com/neuratechcompany-ops/Kettu-Mem/issues
 """
 
-import threading
-import tempfile
 import shutil
+import tempfile
+import threading
 
 import pytest
 
@@ -22,8 +22,7 @@ def mm():
 
 
 @pytest.mark.xfail(
-    strict=True,
-    reason="global _step_counter prevents true concurrent isolation (v0.3.2)"
+    strict=True, reason="global _step_counter prevents true concurrent isolation (v0.3.2)"
 )
 def test_concurrent_sessions_known_limitation(mm):
     """
@@ -68,13 +67,9 @@ def test_concurrent_sessions_known_limitation(mm):
     assert len(errors) == 0, f"Errors: {errors}"
 
     for sid, my_events in per_session_events.items():
-        assert len(my_events) == 20, (
-            f"{sid}: expected 20, got {len(my_events)}"
-        )
+        assert len(my_events) == 20, f"{sid}: expected 20, got {len(my_events)}"
         for other_sid, other_events in per_session_events.items():
             if sid == other_sid:
                 continue
             leaked = [e for e in my_events if other_sid in e]
-            assert len(leaked) == 0, (
-                f"CROSS LEAK: {sid} contains {other_sid}: {leaked}"
-            )
+            assert len(leaked) == 0, f"CROSS LEAK: {sid} contains {other_sid}: {leaked}"
