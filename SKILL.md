@@ -1,7 +1,7 @@
 ---
 name: kettu-mem
-description: "Kettu Mem v0.3.1 — когнитивный слой памяти для OpenClaw. Модульная архитектура, FastAPI, hybrid search, Prometheus, вшитый Evaluation Framework (HAES + MES)."
-version: "0.3.1"
+description: "Kettu Mem v0.4.0 — когнитивный слой памяти для OpenClaw. Модульная архитектура, FastAPI, hybrid search, Prometheus, вшитый Evaluation Framework (HAES + MES)."
+version: "0.4.0"
 metadata:
   openclaw:
     emoji: "🦊"
@@ -11,13 +11,13 @@ metadata:
       env: ["HERMES_MEMORY_ENABLED"]
 ---
 
-# Kettu Mem v0.3.1 — Скилл для OpenClaw
+# Kettu Mem v0.4.0 — Скилл для OpenClaw
 
 ## Что это
 
 Kettu Mem — когнитивный слой памяти, встроенный в agent loop OpenClaw. Управляет планированием задач, сборкой контекста, рефлексией после каждого шага, детекцией бесполезных tool calls и иммутабельным архивом всех действий.
 
-**Новое в v0.3.1:** модульная архитектура, FastAPI + Uvicorn, BM25 + FAISS hybrid search, Memory Quality Scoring, Prometheus метрики, Session Isolation, вшитый Evaluation Framework.
+**Новое в v0.4.0:** модульная архитектура, FastAPI + Uvicorn, BM25 + FAISS hybrid search, Memory Quality Scoring, Prometheus метрики, Session Isolation, вшитый Evaluation Framework.
 
 ## Как использовать
 
@@ -85,7 +85,7 @@ curl http://127.0.0.1:8765/metrics
 cd src && python3 tests/test_evaluation.py
 ```
 
-## Архитектура (v0.3.1)
+## Архитектура (v0.4.0)
 
 ```
 Kettu Mem = FastAPI Server + Memory Manager (thin orchestrator)
@@ -138,5 +138,5 @@ Kettu Mem = FastAPI Server + Memory Manager (thin orchestrator)
 
 - sentence-transformers не установлен по умолчанию (FAISS fallback: OpenAI → sentence-transformers → random)
 - Mem0 extraction — regex-based (не LLM)
-- Concurrent FAISS writes не защищены (fix в v0.3.1)
+- Concurrent FAISS writes не защищены (fix в v0.4.0)
 - Хуки активируются только для сессий, созданных после установки плагина
