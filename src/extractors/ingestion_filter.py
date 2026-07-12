@@ -77,8 +77,15 @@ class IngestionFilter:
 
         Returns (should_ingest, reason).
         """
-        if not content or not isinstance(content, str):
-            return False, "empty_or_non_string"
+        if not isinstance(content, str):
+            return False, "non_string_content"
+
+        # 0. Tool outputs ALWAYS ingested — even empty/whitespace-only
+        if event_type in ("tool_output", "tool_result") or role == "tool":
+            return True, "tool_output_passthrough"
+
+        if not content or not content.strip():
+            return False, "empty_content"
 
         content = content.strip()
 
@@ -89,12 +96,6 @@ class IngestionFilter:
         # 2. Never ingest system role
         if role == "system":
             return False, "system_role"
-
-        # 3. Check tool call metadata
-        if event_type in ("tool_call",):
-            for pat in self._TOOL_METADATA_PATTERNS:
-                if re.match(pat, content):
-                    return False, f"tool_metadata:{event_type}"
 
         # 4. Check reject patterns
         for pattern, reason in self._REJECT_CONTENT_PATTERNS:

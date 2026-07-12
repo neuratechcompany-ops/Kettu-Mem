@@ -20,6 +20,7 @@ Strategy:
 import time
 import uuid
 from dataclasses import dataclass, field
+from typing import Optional
 
 
 @dataclass
@@ -114,8 +115,7 @@ class CompressionEngine:
             summary_id=summary_id,
         )
 
-    def incremental_compress(self, session_id: str, threshold_pct: float = 0.70,
-                             token_count_fn=None) -> CompressionResult | None:
+
         """
         Check if compression is needed and compress oldest uncompressed range.
 
@@ -127,39 +127,52 @@ class CompressionEngine:
         Returns CompressionResult if compression happened, None otherwise.
         """
         # Check if we have uncompressed events
+    def incremental_compress(
+        self,
+        session_id: str,
+        threshold_pct: float = 0.70,
+        token_count_fn=None,
+    ) -> Optional[CompressionResult]:
+        """Check if compression is needed and compress oldest uncompressed range.
+
+        Args:
+            session_id: Session to compress
+            threshold_pct: Trigger threshold (default 0.70)
+            token_count_fn: Optional function returning current token count
+
+        Returns:
+            Optional[CompressionResult]: Compression result or None if no compression performed.
+        """
         summaries = self.sqlite.get_summaries(session_id)
         events = self.l3.read_session(session_id)
 
         if not events:
             return None
 
-        max_step = events[-1]["step_id"]
-        min_step = events[0]["step_id"]
-
-        # Find uncompressed range
+        # Determine which steps are already compressed
         compressed_steps = set()
         for s in summaries:
             compressed_steps.update(range(s["start_step"], s["end_step"] + 1))
 
         uncompressed = [e for e in events if e["step_id"] not in compressed_steps]
 
-        # Only compress if we have enough uncompressed events
+        # Need enough events to make compression worthwhile
         if len(uncompressed) < 10:
             return None
 
-        # Check threshold if token count provided
+        # Optional token‑budget threshold
         if token_count_fn:
             actual = token_count_fn()
-            budget = 32000  # default
+            budget = 32000
             if (actual / budget) < threshold_pct:
                 return None
 
-        # Compress oldest half of uncompressed
+        # Compress the oldest half of uncompressed events
         mid = len(uncompressed) // 2
         to_compress = uncompressed[:mid]
         start = to_compress[0]["step_id"]
         end = to_compress[-1]["step_id"]
-
+ 
         return self.compress_range(session_id, start, end)
 
     def _extract_decisions(self, events: list[dict]) -> list[str]:

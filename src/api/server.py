@@ -400,18 +400,39 @@ async def events_last(request: Request):
 # ── Mem0 endpoints ──────────────────────────────────────
 
 @app.get("/mem0/search")
-async def mem0_search(request: Request):
-    """Search long-term memory."""
-    query = request.query_params.get("q", "")
-    limit = int(request.query_params.get("limit", 10))
-    facts = _mm.get_mem0_context(query, limit) if _mm else []
-    archive_hits = _search_archive(query, limit) if _mm else []
+async def mem0_search(
+    q: str = "", min_confidence: float = 0.6,
+    fact_types: str = "", project: str = "",
+    session_id: str = "", limit: int = 10,
+    deduplicate: bool = True, include_superseded: bool = False,
+):
+    """Search with fact type filters, dedup, and superseded handling."""
+    if not _mm or not q:
+        return {"query": q, "results": [], "archive_hits": [], "count": 0, "archive_count": 0}
+
+    if project: setattr(_mm, "_project", project)  # soft project isolation
+    raw = _mm.get_mem0_context(q, limit * 2 if deduplicate else limit)
+    archive_hits = _search_archive(q, limit) if _mm else []
+    types_set = set(t.strip() for t in fact_types.split(",") if t.strip())
+
+    results = []
+    seen = set()
+    for f in raw:
+        ft = f.get("fact_type", "")
+        conf = f.get("confidence", 0)
+        if conf < min_confidence: continue
+        if types_set and ft not in types_set: continue
+        if not include_superseded and f.get("superseded", False): continue
+        key = f.get("content", "")[:80]
+        if deduplicate:
+            if key in seen: continue
+            seen.add(key)
+        results.append(f)
+        if len(results) >= limit: break
+
     return {
-        "query": query,
-        "results": facts,
-        "archive_hits": archive_hits,
-        "count": len(facts),
-        "archive_count": len(archive_hits),
+        "query": q, "results": results, "archive_hits": archive_hits,
+        "count": len(results), "archive_count": len(archive_hits),
     }
 
 
@@ -533,8 +554,10 @@ async def context_build(request: Request):
         query = ""; session_id = None; project = "default"
         token_budget = 4000; fact_types = []; min_confidence = 0.6
 
-    # Set project
-    if project and _mm: _mm.set_project(project)
+    # Set project (safe — wraps missing method)
+    if project and _mm:
+        try: _mm.set_project(project)
+        except AttributeError: pass
 
     # Get cognitive context
     prompt, stats = _cr.build_context(query, token_budget=token_budget) if _cr else ("", {})
@@ -564,41 +587,6 @@ async def context_build(request: Request):
         "sources": list(set(sources))[:10],
         "token_count": min(len(prompt)//3, token_budget) if prompt else 0,
     }
-
-
-# ── v0.3.0: Enhanced Search (P1) ──────────────────────
-
-@app.get("/mem0/search")
-async def mem0_search_enhanced(
-    q: str = "", min_confidence: float = 0.6,
-    fact_types: str = "", project: str = "",
-    session_id: str = "", limit: int = 10,
-    deduplicate: bool = True, include_superseded: bool = False,
-):
-    """Enhanced search with fact type filters and dedup."""
-    if not _mm or not q:
-        return {"results": [], "count": 0}
-
-    if project: _mm.set_project(project)
-    raw = _mm.mem0.search(q, limit=limit * 2 if deduplicate else limit)
-    types_set = set(t.strip() for t in fact_types.split(",") if t.strip())
-
-    results = []
-    seen = set()
-    for f in raw:
-        ft = f.get("fact_type", "")
-        conf = f.get("confidence", 0)
-        if conf < min_confidence: continue
-        if types_set and ft not in types_set: continue
-        if not include_superseded and f.get("superseded", False): continue
-        key = f.get("content", "")[:80]
-        if deduplicate:
-            if key in seen: continue
-            seen.add(key)
-        results.append(f)
-        if len(results) >= limit: break
-
-    return {"results": results, "count": len(results)}
 
 
 # ── v0.3.0: Ingest Hook (P1) ──────────────────────────
