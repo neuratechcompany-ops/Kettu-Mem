@@ -1,4 +1,5 @@
 """HTTP security integration tests via TestClient."""
+
 import os
 
 import pytest
@@ -17,6 +18,7 @@ def setup_env():
 @pytest.fixture
 def client():
     from api.server import app
+
     with TestClient(app, raise_server_exceptions=False) as c:
         yield c
 
@@ -31,21 +33,17 @@ class TestSecurityHTTP:
 
     # Auth: wrong key
     def test_wrong_key_returns_401(self, client):
-        resp = client.get("/mem0/stats",
-                           headers={"X-API-Key": "wrong-key"})
+        resp = client.get("/mem0/stats", headers={"X-API-Key": "wrong-key"})
         assert resp.status_code == 401, f"Expected 401, got {resp.status_code}: {resp.text}"
 
     # Auth: valid key
     def test_valid_key_returns_200(self, client):
-        resp = client.get("/mem0/stats",
-                          headers={"X-API-Key": API_KEY})
+        resp = client.get("/mem0/stats", headers={"X-API-Key": API_KEY})
         assert resp.status_code == 200, f"Expected 200, got {resp.status_code}: {resp.text}"
 
     # Invalid payload → 422
     def test_invalid_payload_returns_422(self, client):
-        resp = client.post("/turn/before",
-                           json={"bad": "data"},
-                           headers={"X-API-Key": API_KEY})
+        resp = client.post("/turn/before", json={"bad": "data"}, headers={"X-API-Key": API_KEY})
         assert resp.status_code == 422, f"Expected 422, got {resp.status_code}: {resp.text}"
 
     # Public endpoints — no key needed

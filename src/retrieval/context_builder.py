@@ -18,21 +18,40 @@ from enum import Enum
 
 
 class BudgetStrategy(Enum):
-    TIGHT = "tight"       # 16K budget, minimal context
-    NORMAL = "normal"     # 32K budget, balanced
-    GENEROUS = "generous" # 64K budget, rich context
+    TIGHT = "tight"  # 16K budget, minimal context
+    NORMAL = "normal"  # 32K budget, balanced
+    GENEROUS = "generous"  # 64K budget, rich context
 
 
 STRATEGY_CONFIGS = {
-    BudgetStrategy.TIGHT:    {"budget": 16000, "reserve": 0.15, "recent": 15, "semantic": 5, "summaries": 3},
-    BudgetStrategy.NORMAL:   {"budget": 32000, "reserve": 0.20, "recent": 30, "semantic": 10, "summaries": 5},
-    BudgetStrategy.GENEROUS: {"budget": 64000, "reserve": 0.20, "recent": 50, "semantic": 15, "summaries": 10},
+    BudgetStrategy.TIGHT: {
+        "budget": 16000,
+        "reserve": 0.15,
+        "recent": 15,
+        "semantic": 5,
+        "summaries": 3,
+    },
+    BudgetStrategy.NORMAL: {
+        "budget": 32000,
+        "reserve": 0.20,
+        "recent": 30,
+        "semantic": 10,
+        "summaries": 5,
+    },
+    BudgetStrategy.GENEROUS: {
+        "budget": 64000,
+        "reserve": 0.20,
+        "recent": 50,
+        "semantic": 15,
+        "summaries": 10,
+    },
 }
 
 
 @dataclass
 class ContextConfig:
     """Configuration for context assembly."""
+
     token_budget: int = 32000
     output_reserve_pct: float = 0.20
     recent_events_limit: int = 30
@@ -71,17 +90,19 @@ class ContextConfig:
 @dataclass
 class ContextSlice:
     """A piece of context with token count."""
+
     name: str
     content: str
     tokens: int = 0
-    priority: int = 0   # lower = higher priority
-    weight: float = 1.0 # weight for budget allocation
+    priority: int = 0  # lower = higher priority
+    weight: float = 1.0  # weight for budget allocation
     min_tokens: int = 0  # minimum token guarantee
 
 
 @dataclass
 class ToolSchema:
     """Filtered tool schema for context."""
+
     name: str
     description: str
     parameters: dict = None
@@ -119,9 +140,11 @@ class ContextBuilder:
     def _init_tokenizer(self):
         try:
             import tiktoken
+
             self._tokenizer = tiktoken.encoding_for_model(self.config.model_name)
         except (ImportError, ValueError, KeyError, ModuleNotFoundError):
             import tiktoken
+
             self._tokenizer = tiktoken.get_encoding("cl100k_base")
 
     def _count_tokens(self, text: str) -> int:
@@ -136,9 +159,13 @@ class ContextBuilder:
 
     def set_system(self, system_prompt: str):
         content = system_prompt
-        self._add_slice("system", content, priority=0,
-                        weight=self.config.weight_system,
-                        min_tokens=self.config.min_system_tokens)
+        self._add_slice(
+            "system",
+            content,
+            priority=0,
+            weight=self.config.weight_system,
+            min_tokens=self.config.min_system_tokens,
+        )
 
     def set_tools(self, tools: list[ToolSchema]):
         """Add tool schemas. Filtrered by relevance."""
@@ -153,8 +180,7 @@ class ContextBuilder:
             if params_str:
                 lines.append(f"  params: {params_str}")
         content = "\n".join(lines)
-        self._add_slice("tools", content, priority=1,
-                        weight=self.config.weight_tools)
+        self._add_slice("tools", content, priority=1, weight=self.config.weight_tools)
 
     def set_recent_events(self, events: list[dict]):
         """Set recent session events (priority 1). Tool outputs are EXCLUDED (archive only)."""
@@ -185,15 +211,18 @@ class ContextBuilder:
                         refs = []
                 if refs:
                     ref_str = ", ".join(
-                        f"{r[0]}:{r[1]}" if isinstance(r, list) else str(r)
-                        for r in refs
+                        f"{r[0]}:{r[1]}" if isinstance(r, list) else str(r) for r in refs
                     )
                     lines.append(f"  ↳ refs: {ref_str}")
 
-        text = "## Recent Session Events\n" + "\n".join(lines[-self.config.recent_events_limit:])
-        self._add_slice("recent_events", text, priority=1,
-                        weight=self.config.weight_recent,
-                        min_tokens=self.config.min_recent_tokens)
+        text = "## Recent Session Events\n" + "\n".join(lines[-self.config.recent_events_limit :])
+        self._add_slice(
+            "recent_events",
+            text,
+            priority=1,
+            weight=self.config.weight_recent,
+            min_tokens=self.config.min_recent_tokens,
+        )
 
     def set_mem0_facts(self, facts: list[dict]):
         """
@@ -220,7 +249,7 @@ class ContextBuilder:
         }
 
         for ftype, label in type_labels.items():
-            items = by_type.get(ftype, [])[:self.config.max_mem0_facts]
+            items = by_type.get(ftype, [])[: self.config.max_mem0_facts]
             if not items:
                 continue
             lines.append(f"\n### {label}")
@@ -235,8 +264,7 @@ class ContextBuilder:
         if len(lines) == 1:  # Only header
             return
         text = "\n".join(lines)
-        self._add_slice("mem0", text, priority=2,
-                        weight=self.config.weight_mem0)
+        self._add_slice("mem0", text, priority=2, weight=self.config.weight_mem0)
 
     def set_semantic_results(self, results: list[dict]):
         """Set FAISS semantic search results (priority 2)."""
@@ -244,21 +272,25 @@ class ContextBuilder:
             return
 
         lines = ["## Relevant Memories (semantic search)"]
-        for i, r in enumerate(results[:self.config.max_semantic_chunks]):
+        for i, r in enumerate(results[: self.config.max_semantic_chunks]):
             score_pct = r.get("score", 0) * 100
             text = r.get("chunk_text", "")[:400]
             lines.append(f"[{i+1}] score={score_pct:.0f}% | {text}")
         text = "\n".join(lines)
-        self._add_slice("semantic", text, priority=2,
-                        weight=self.config.weight_semantic,
-                        min_tokens=self.config.min_semantic_tokens)
+        self._add_slice(
+            "semantic",
+            text,
+            priority=2,
+            weight=self.config.weight_semantic,
+            min_tokens=self.config.min_semantic_tokens,
+        )
 
     def set_summaries(self, summaries: list[dict]):
         """Set stage summaries (priority 2)."""
         if not summaries:
             return
         lines = ["## Session Summaries"]
-        for s in summaries[:self.config.max_summaries]:
+        for s in summaries[: self.config.max_summaries]:
             s_type = s.get("type", "summary")
             s_start = s.get("start_step", "?")
             s_end = s.get("end_step", "?")
@@ -266,29 +298,36 @@ class ContextBuilder:
             lines.append(f"- [{s_type}] steps {s_start}-{s_end}:")
             lines.append(f"  {content}")
         text = "\n".join(lines)
-        self._add_slice("summaries", text, priority=2,
-                        weight=self.config.weight_summaries)
+        self._add_slice("summaries", text, priority=2, weight=self.config.weight_summaries)
 
     def set_archive_refs(self, refs: list[dict]):
         """Set L3 archive references (priority 3) — pointers, not full content."""
         if not refs:
             return
         lines = ["## Archive References"]
-        for r in refs[:self.config.max_archive_snippets]:
-            lines.append(f"- [{r.get('type','?')}] step {r.get('step_id','?')}: {r.get('content','')[:300]}")
+        for r in refs[: self.config.max_archive_snippets]:
+            lines.append(
+                f"- [{r.get('type','?')}] step {r.get('step_id','?')}: {r.get('content','')[:300]}"
+            )
         text = "\n".join(lines)
-        self._add_slice("archive_refs", text, priority=3,
-                        weight=self.config.weight_archive)
+        self._add_slice("archive_refs", text, priority=3, weight=self.config.weight_archive)
 
     # ── Assembly ─────────────────────────────────────────
 
-    def _add_slice(self, name: str, content: str, priority: int,
-                   weight: float = 1.0, min_tokens: int = 0):
+    def _add_slice(
+        self, name: str, content: str, priority: int, weight: float = 1.0, min_tokens: int = 0
+    ):
         tokens = self._count_tokens(content)
-        self._slices.append(ContextSlice(
-            name=name, content=content, tokens=tokens,
-            priority=priority, weight=weight, min_tokens=min_tokens,
-        ))
+        self._slices.append(
+            ContextSlice(
+                name=name,
+                content=content,
+                tokens=tokens,
+                priority=priority,
+                weight=weight,
+                min_tokens=min_tokens,
+            )
+        )
 
     def _weighted_assembly(self) -> str:
         """
@@ -368,10 +407,12 @@ class ContextBuilder:
             "used_tokens": used,
             "remaining": self.working_budget - used,
             "output_reserve": int(self.config.token_budget * self.config.output_reserve_pct),
-            "utilization_pct": round(used / self.working_budget * 100, 1) if self.working_budget > 0 else 0,
+            "utilization_pct": (
+                round(used / self.working_budget * 100, 1) if self.working_budget > 0 else 0
+            ),
             "compression_needed": (used / self.config.token_budget) >= 0.70,
             "slices": [
                 {"name": s.name, "tokens": s.tokens, "priority": s.priority, "weight": s.weight}
                 for s in sorted(self._slices, key=lambda x: x.priority)
-            ]
+            ],
         }

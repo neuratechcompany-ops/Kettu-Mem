@@ -12,6 +12,7 @@ Usage:
   from config import settings
   print(settings.data_dir)
 """
+
 from pathlib import Path
 from typing import Optional
 

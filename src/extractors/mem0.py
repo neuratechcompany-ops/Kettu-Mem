@@ -15,6 +15,7 @@ Design principles:
 - Deduplication: merge similar facts, increase confidence
 - SQLite for structured storage, FAISS for semantic retrieval
 """
+
 import hashlib
 import json
 import time
@@ -27,15 +28,16 @@ from extractors.memory_quality import MemoryQualityScorer
 
 class FactType(Enum):
     PREFERENCE = "preference"  # user likes/dislikes
-    DECISION = "decision"      # project decisions
-    FACT = "fact"              # declarative knowledge
-    ENTITY = "entity"          # named entity
-    RELATION = "relation"      # entity relationship
+    DECISION = "decision"  # project decisions
+    FACT = "fact"  # declarative knowledge
+    ENTITY = "entity"  # named entity
+    RELATION = "relation"  # entity relationship
 
 
 @dataclass
 class Mem0Fact:
     """A single long-term memory fact."""
+
     fact_id: str
     type: FactType
     content: str
@@ -81,6 +83,7 @@ class Mem0Store:
 
     def __init__(self, db_path: str, faiss_index=None):
         import sqlite3
+
         self.conn = sqlite3.connect(db_path)
         self.conn.row_factory = sqlite3.Row
         self.conn.execute("PRAGMA journal_mode=WAL")
@@ -133,10 +136,17 @@ class Mem0Store:
     def _make_hash(self, content: str) -> str:
         return hashlib.sha256(content.encode()).hexdigest()[:16]
 
-    def add_fact(self, fact_type: FactType, content: str, *,
-                 confidence: float = 1.0, entities: list[str] = None,
-                 source_session: str = "", source_event: str = "",
-                 source_step: int = 0) -> Mem0Fact:
+    def add_fact(
+        self,
+        fact_type: FactType,
+        content: str,
+        *,
+        confidence: float = 1.0,
+        entities: list[str] = None,
+        source_session: str = "",
+        source_event: str = "",
+        source_step: int = 0,
+    ) -> Mem0Fact:
         """
         Add a fact with ADD-only semantics.
         If a similar fact exists (same hash), increase confidence instead.
@@ -154,7 +164,7 @@ class Mem0Store:
             self.conn.execute(
                 """UPDATE mem0_facts SET confidence = ?, updated_at = ?, access_count = access_count + 1
                    WHERE fact_id = ?""",
-                (new_conf, time.time(), existing["fact_id"])
+                (new_conf, time.time(), existing["fact_id"]),
             )
             self.conn.commit()
             return self._row_to_fact(existing)
@@ -169,12 +179,23 @@ class Mem0Store:
                entities_json, source_session, source_event, source_step,
                hash_key, created_at, updated_at, access_count)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)""",
-            (fact_id, fact_type.value, content, confidence, ent_json,
-             source_session, source_event, source_step, hash_key, now, now)
+            (
+                fact_id,
+                fact_type.value,
+                content,
+                confidence,
+                ent_json,
+                source_session,
+                source_event,
+                source_step,
+                hash_key,
+                now,
+                now,
+            ),
         )
 
         # Register entities
-        for ent in (entities or []):
+        for ent in entities or []:
             self._register_entity(ent, "derived")
 
         self.conn.commit()
@@ -185,14 +206,21 @@ class Mem0Store:
                 self.faiss.add_vectors([content], self._next_faiss_id())
             except (ValueError, RuntimeError, OSError) as e:
                 import structlog
+
                 logger = structlog.get_logger("mem0")
                 logger.warning("faiss_add_vectors_failed", error=str(e)[:200])
 
         return Mem0Fact(
-            fact_id=fact_id, type=fact_type, content=content,
-            confidence=confidence, entities=entities or [],
-            source_session=source_session, source_event=source_event,
-            source_step=source_step, created_at=now, hash_key=hash_key,
+            fact_id=fact_id,
+            type=fact_type,
+            content=content,
+            confidence=confidence,
+            entities=entities or [],
+            source_session=source_session,
+            source_event=source_event,
+            source_step=source_step,
+            created_at=now,
+            hash_key=hash_key,
         )
 
     def _next_faiss_id(self) -> int:
@@ -207,7 +235,7 @@ class Mem0Store:
                VALUES (?, ?, ?, ?, ?)
                ON CONFLICT(name) DO UPDATE SET
                last_seen_at = ?, mention_count = mention_count + 1""",
-            (entity_id, name, entity_type, now, now, now)
+            (entity_id, name, entity_type, now, now, now),
         )
 
     def _row_to_fact(self, row) -> Mem0Fact:
@@ -253,40 +281,62 @@ class Mem0Store:
             # Extract preferences (only from user)
             if role == "user":
                 for fact in self._extract_preferences(content, session_id, event_id, step):
-                    f = self.add_fact(FactType.PREFERENCE, fact["content"],
-                                      confidence=fact["confidence"],
-                                      source_session=session_id,
-                                      source_event=event_id, source_step=step)
+                    f = self.add_fact(
+                        FactType.PREFERENCE,
+                        fact["content"],
+                        confidence=fact["confidence"],
+                        source_session=session_id,
+                        source_event=event_id,
+                        source_step=step,
+                    )
                     extracted.append(f)
 
             # Extract decisions
             for fact in self._extract_decisions_from_text(content, session_id, event_id, step):
-                f = self.add_fact(FactType.DECISION, fact["content"],
-                                  confidence=fact["confidence"],
-                                  source_session=session_id,
-                                  source_event=event_id, source_step=step)
+                f = self.add_fact(
+                    FactType.DECISION,
+                    fact["content"],
+                    confidence=fact["confidence"],
+                    source_session=session_id,
+                    source_event=event_id,
+                    source_step=step,
+                )
                 extracted.append(f)
 
             # Extract entities
             entities = self._find_entities(content)
             for ent in entities:
-                self.add_fact(FactType.ENTITY, f"Entity: {ent}", confidence=0.8,
-                              entities=[ent],
-                              source_session=session_id,
-                              source_event=event_id, source_step=step)
+                self.add_fact(
+                    FactType.ENTITY,
+                    f"Entity: {ent}",
+                    confidence=0.8,
+                    entities=[ent],
+                    source_session=session_id,
+                    source_event=event_id,
+                    source_step=step,
+                )
 
         return extracted
 
-    def _extract_preferences(self, text: str, session_id: str, event_id: str, step: int) -> list[dict]:
+    def _extract_preferences(
+        self, text: str, session_id: str, event_id: str, step: int
+    ) -> list[dict]:
         """Extract user preferences from text."""
         prefs = []
         patterns = [
-            (r"(?:я|мне)\s+(?:люблю|нравится|предпочитаю|важно|ценю)\s+(.{10,100}?)(?:[.!?]|$)", 0.85),
-            (r"(?:я|мне)\s+(?:не люблю|не нравится|раздражает|бесит)\s+(.{10,100}?)(?:[.!?]|$)", 0.9),
+            (
+                r"(?:я|мне)\s+(?:люблю|нравится|предпочитаю|важно|ценю)\s+(.{10,100}?)(?:[.!?]|$)",
+                0.85,
+            ),
+            (
+                r"(?:я|мне)\s+(?:не люблю|не нравится|раздражает|бесит)\s+(.{10,100}?)(?:[.!?]|$)",
+                0.9,
+            ),
             (r"I\s+(?:prefer|like|love|hate|dislike)\s+(.{10,100}?)(?:[.!?]|$)", 0.8),
             (r"(?:хочу|буду)\s+(?:чтобы|использовать|работать)\s+(.{10,100}?)(?:[.!?]|$)", 0.7),
         ]
         import re
+
         for pattern, conf in patterns:
             matches = re.findall(pattern, text, re.IGNORECASE)
             for m in matches:
@@ -295,9 +345,12 @@ class Mem0Store:
                     prefs.append({"content": f"Предпочитает: {pref_text}", "confidence": conf})
         return prefs[:3]
 
-    def _extract_decisions_from_text(self, text: str, session_id: str, event_id: str, step: int) -> list[dict]:
+    def _extract_decisions_from_text(
+        self, text: str, session_id: str, event_id: str, step: int
+    ) -> list[dict]:
         """Extract decisions from text."""
         import re
+
         decisions = []
         markers = [
             r"(?:решил[аи]?|решение|decided|decision)\s*:?\s*(.{10,200}?)(?:[.!]|$)",
@@ -315,21 +368,33 @@ class Mem0Store:
     def _find_entities(self, text: str) -> list[str]:
         """Find named entities in text (heuristic)."""
         import re
+
         entities = set()
 
         # Capitalized multi-word terms
-        caps = re.findall(r'\b([A-ZА-Я][a-zа-я]+(?:\s+[A-ZА-Я][a-zа-я]+){1,3})\b', text)
+        caps = re.findall(r"\b([A-ZА-Я][a-zа-я]+(?:\s+[A-ZА-Я][a-zа-я]+){1,3})\b", text)
         for c in caps:
             if len(c) > 3 and c.lower() not in ("давай", "привет", "окей"):
                 entities.add(c)
 
         # @mentions
-        mentions = re.findall(r'@(\w+)', text)
+        mentions = re.findall(r"@(\w+)", text)
         entities.update(mentions)
 
         # Known brand/product patterns
-        brands = ["AmoCRM", "Bitrix24", "Яндекс", "Google", "Telegram",
-                   "Notion", "Figma", "Slack", "Jira", "Miro", "Excel"]
+        brands = [
+            "AmoCRM",
+            "Bitrix24",
+            "Яндекс",
+            "Google",
+            "Telegram",
+            "Notion",
+            "Figma",
+            "Slack",
+            "Jira",
+            "Miro",
+            "Excel",
+        ]
         for b in brands:
             if b.lower() in text.lower():
                 entities.add(b)
@@ -341,7 +406,7 @@ class Mem0Store:
     def get_by_type(self, fact_type: FactType, limit: int = 20) -> list[dict]:
         rows = self.conn.execute(
             "SELECT * FROM mem0_facts WHERE type = ? ORDER BY confidence DESC, access_count DESC LIMIT ?",
-            (fact_type.value, limit)
+            (fact_type.value, limit),
         ).fetchall()
         return [self._row_to_fact(r).to_dict() for r in rows]
 
@@ -349,12 +414,10 @@ class Mem0Store:
         if source_session:
             rows = self.conn.execute(
                 "SELECT * FROM mem0_facts WHERE source_session = ? ORDER BY updated_at DESC",
-                (source_session,)
+                (source_session,),
             ).fetchall()
         else:
-            rows = self.conn.execute(
-                "SELECT * FROM mem0_facts ORDER BY updated_at DESC"
-            ).fetchall()
+            rows = self.conn.execute("SELECT * FROM mem0_facts ORDER BY updated_at DESC").fetchall()
         facts = [self._row_to_fact(r) for r in rows]
         # Apply quality scoring and filter expired
         scored = self._score_and_filter(facts)
@@ -373,12 +436,10 @@ class Mem0Store:
         if source_session:
             rows = self.conn.execute(
                 "SELECT * FROM mem0_facts WHERE source_session = ? ORDER BY confidence DESC",
-                (source_session,)
+                (source_session,),
             ).fetchall()
         else:
-            rows = self.conn.execute(
-                "SELECT * FROM mem0_facts ORDER BY confidence DESC"
-            ).fetchall()
+            rows = self.conn.execute("SELECT * FROM mem0_facts ORDER BY confidence DESC").fetchall()
         results = []
         for row in rows:
             content_lower = row["content"].lower()
@@ -400,7 +461,7 @@ class Mem0Store:
         for r in results:
             row = self.conn.execute(
                 "SELECT * FROM mem0_facts WHERE fact_id = (SELECT fact_id FROM mem0_facts LIMIT 1 OFFSET ?)",
-                (r.get("faiss_id", 0),)
+                (r.get("faiss_id", 0),),
             ).fetchone()
             if row:
                 d = self._row_to_fact(row).to_dict()
@@ -412,15 +473,17 @@ class Mem0Store:
         """Apply quality scoring, filter expired, rank by final_score."""
         scored = []
         for fact in facts:
-            fact_dict = fact.to_dict() if hasattr(fact, 'to_dict') else fact
+            fact_dict = fact.to_dict() if hasattr(fact, "to_dict") else fact
             score = self.scorer.calculate(fact_dict)
             if score.is_expired:
                 continue
-            scored.append({
-                "fact": fact,
-                "score": score,
-                "total": score.total,
-            })
+            scored.append(
+                {
+                    "fact": fact,
+                    "score": score,
+                    "total": score.total,
+                }
+            )
         # Sort by total score descending
         scored.sort(key=lambda s: s["total"], reverse=True)
         return scored

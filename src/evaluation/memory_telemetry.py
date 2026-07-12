@@ -11,6 +11,7 @@ Hooks into:
 
 Non-invasive: reads state without modifying MemoryManager.
 """
+
 import time
 
 
@@ -56,7 +57,7 @@ class MemoryTelemetry:
             raw_tokens = int(l3_size / 3.5)  # ~3.5 chars/token for Russian+English
 
             # Prompt tokens from last context build
-            prompt_tokens = getattr(self, '_last_prompt_tokens', 0)
+            prompt_tokens = getattr(self, "_last_prompt_tokens", 0)
 
             # Compression ratio
             comp_ratio = raw_tokens / max(prompt_tokens, 1) if prompt_tokens else 0
@@ -67,14 +68,19 @@ class MemoryTelemetry:
             avg_summary_size = from_db.get("avg_summary_size", 0)
 
             # Summary compression ratio: raw tokens per summary vs summary size
-            summary_comp_ratio = (l3_size / max(summaries, 1)) / max(avg_summary_size, 1) if summaries else 0
+            summary_comp_ratio = (
+                (l3_size / max(summaries, 1)) / max(avg_summary_size, 1) if summaries else 0
+            )
 
             # Quality check: does compression cause degradation?
             # Heuristic: if summary sizes growing faster than events
-            quality_ok = 0 if (summaries > 0 and avg_summary_size > l3_size / max(summaries, 1) * 3) else 1
+            quality_ok = (
+                0 if (summaries > 0 and avg_summary_size > l3_size / max(summaries, 1) * 3) else 1
+            )
 
             self.store.record_compression(
-                self.run_id, step,
+                self.run_id,
+                step,
                 raw_history_tokens=raw_tokens,
                 prompt_tokens=prompt_tokens,
                 compression_ratio=round(comp_ratio, 2),
@@ -110,13 +116,13 @@ class MemoryTelemetry:
             stats = self.mm.get_archive_stats()
             l3_size = stats.get("l3_size_bytes", 0) or 0
             raw_tokens = int(l3_size / 3.5)
-            prompt_tokens = getattr(self, '_last_prompt_tokens', 0)
+            prompt_tokens = getattr(self, "_last_prompt_tokens", 0)
 
             # Growth vs first checkpoint
             growth = 1.0
             prev = self.store.conn.execute(
                 "SELECT prompt_tokens FROM prompt_snapshots WHERE run_id=? ORDER BY step LIMIT 1",
-                (self.run_id,)
+                (self.run_id,),
             ).fetchone()
             if prev and prev["prompt_tokens"] > 0:
                 growth = round(prompt_tokens / prev["prompt_tokens"], 2)
@@ -125,7 +131,8 @@ class MemoryTelemetry:
             linear_warning = 1 if (step > 100 and growth > step / 100 * 0.5) else 0
 
             self.store.record_prompt_snapshot(
-                self.run_id, step,
+                self.run_id,
+                step,
                 raw_history_tokens=raw_tokens,
                 prompt_tokens=prompt_tokens,
                 growth_vs_first=growth,
@@ -140,8 +147,7 @@ class MemoryTelemetry:
 
     # ── 3. Retrieval ────────────────────────────────────
 
-    def sample_retrieval(self, step: int, query: str = None,
-                         ground_truth_ids: list[str] = None):
+    def sample_retrieval(self, step: int, query: str = None, ground_truth_ids: list[str] = None):
         """Measure retrieval quality with self-consistency test."""
         try:
             t0 = time.time()
@@ -160,7 +166,7 @@ class MemoryTelemetry:
                     if len(words) > 20:
                         query = " ".join(words[:15])  # first 15 words
                     elif len(words) > 8:
-                        query = " ".join(words[:len(words)//2])  # half the chunk
+                        query = " ".join(words[: len(words) // 2])  # half the chunk
                     # else keep as-is
                     ground_truth_ids = [str(rows[0]["faiss_id"])]
                 else:
@@ -191,7 +197,8 @@ class MemoryTelemetry:
             irrelevant = sum(1 for r in results if r.get("score", 0) < 0.05)
 
             self.store.record_retrieval(
-                self.run_id, step,
+                self.run_id,
+                step,
                 recall_at_1=round(recall_at(1), 3),
                 recall_at_3=round(recall_at(3), 3),
                 recall_at_5=round(recall_at(5), 3),
@@ -223,11 +230,12 @@ class MemoryTelemetry:
             unused = total - stats.get("facts_with_relations", 0)
 
             # Memory hit rate (from last search)
-            hits = getattr(self.mm.mem0, '_last_search_hits', 0)
+            hits = getattr(self.mm.mem0, "_last_search_hits", 0)
             hit_rate = min(1.0, hits / max(total, 1)) if total else 0
 
             self.store.record_mem0_snapshot(
-                self.run_id, step,
+                self.run_id,
+                step,
                 facts_total=total,
                 facts_used=total - unused,
                 facts_never_used=unused,
@@ -265,7 +273,7 @@ class MemoryTelemetry:
             cutoff = time.time() - 30 * 86400
             row = self.mm.mem0.conn.execute(
                 "SELECT COUNT(*) as c FROM mem0_facts WHERE updated_at < ? AND updated_at > 0",
-                (cutoff,)
+                (cutoff,),
             ).fetchone()
             return row["c"] if row else 0
         except Exception:
@@ -311,7 +319,8 @@ class MemoryTelemetry:
             search_speed = (time.time() - t0) * 1000
 
             self.store.record_archive_check(
-                self.run_id, step,
+                self.run_id,
+                step,
                 is_append_only=1,
                 event_loss_count=0,
                 refs_correct_count=correct_refs,
@@ -328,25 +337,26 @@ class MemoryTelemetry:
         """Measure context builder efficiency."""
         try:
             # Context build latency (from last build)
-            build_latency = getattr(self, '_last_context_build_ms', 0)
+            build_latency = getattr(self, "_last_context_build_ms", 0)
 
-            prompt_tokens = getattr(self, '_last_prompt_tokens', 0)
-            budget = getattr(self, '_last_context_budget', 32000)
+            prompt_tokens = getattr(self, "_last_prompt_tokens", 0)
+            budget = getattr(self, "_last_context_budget", 32000)
             utilisation = (prompt_tokens / max(budget, 1)) * 100 if budget else 0
 
             # Contribution breakdown (estimated from context build stats)
-            mem_contribution = getattr(self, '_last_mem0_contribution', 0)
-            semantic_contribution = getattr(self, '_last_semantic_contribution', 0)
-            recent_contribution = getattr(self, '_last_recent_contribution', 0)
-            summary_contribution = getattr(self, '_last_summary_contribution', 0)
+            mem_contribution = getattr(self, "_last_mem0_contribution", 0)
+            semantic_contribution = getattr(self, "_last_semantic_contribution", 0)
+            recent_contribution = getattr(self, "_last_recent_contribution", 0)
+            summary_contribution = getattr(self, "_last_summary_contribution", 0)
 
             # Tool output leakage
-            raw_outputs = getattr(self, '_raw_tool_outputs_in_prompt', 0)
-            extra_msgs = getattr(self, '_extra_messages', 0)
+            raw_outputs = getattr(self, "_raw_tool_outputs_in_prompt", 0)
+            extra_msgs = getattr(self, "_extra_messages", 0)
             budget_ok = 0 if prompt_tokens > budget else 1
 
             self.store.record_context_snapshot(
-                self.run_id, step,
+                self.run_id,
+                step,
                 build_latency_ms=round(build_latency, 1),
                 avg_prompt_size=prompt_tokens,
                 prompt_utilisation_pct=round(utilisation, 1),
@@ -361,8 +371,7 @@ class MemoryTelemetry:
         except Exception as e:
             print(f"[MemoryTelemetry] Context builder error: {e}")
 
-    def set_context_metrics(self, build_latency_ms: float, prompt_tokens: int,
-                            budget: int = 32000):
+    def set_context_metrics(self, build_latency_ms: float, prompt_tokens: int, budget: int = 32000):
         self._last_context_build_ms = build_latency_ms
         self._last_prompt_tokens = prompt_tokens
         self._last_context_budget = budget
@@ -387,10 +396,11 @@ class MemoryTelemetry:
             search_latency = (time.time() - t0) * 1000
 
             # Rebuild latency (estimated)
-            rebuild_latency = getattr(self, '_last_rebuild_latency_ms', 0)
+            rebuild_latency = getattr(self, "_last_rebuild_latency_ms", 0)
 
             self.store.record_semantic_snapshot(
-                self.run_id, step,
+                self.run_id,
+                step,
                 search_latency_ms=round(search_latency, 1),
                 rebuild_latency_ms=round(rebuild_latency, 1),
                 vector_count=vector_count,
@@ -428,9 +438,12 @@ class MemoryTelemetry:
     def check_recovery(self, recovery_id: int = 1):
         """After restart, check all layers recovered."""
         results = {
-            "l3_recovered": 0, "sqlite_recovered": 0,
-            "faiss_recovered": 0, "mem0_recovered": 0,
-            "refs_recovered": 0, "summaries_recovered": 0,
+            "l3_recovered": 0,
+            "sqlite_recovered": 0,
+            "faiss_recovered": 0,
+            "mem0_recovered": 0,
+            "refs_recovered": 0,
+            "summaries_recovered": 0,
         }
 
         try:
@@ -464,27 +477,24 @@ class MemoryTelemetry:
 
         try:
             # Refs: check vector_map
-            row = self.mm.sqlite.conn.execute(
-                "SELECT COUNT(*) as c FROM vector_map"
-            ).fetchone()
+            row = self.mm.sqlite.conn.execute("SELECT COUNT(*) as c FROM vector_map").fetchone()
             results["refs_recovered"] = 1 if row and row["c"] > 0 else 0
         except Exception:
             pass
 
         try:
             # Summaries
-            row = self.mm.sqlite.conn.execute(
-                "SELECT COUNT(*) as c FROM summaries"
-            ).fetchone()
+            row = self.mm.sqlite.conn.execute("SELECT COUNT(*) as c FROM summaries").fetchone()
             results["summaries_recovered"] = 1 if row and row["c"] > 0 else 0
         except Exception:
             pass
 
         all_ok = 1 if all(v == 1 for v in results.values()) else 0
-        recovery_time = getattr(self, '_recovery_duration_ms', 0)
+        recovery_time = getattr(self, "_recovery_duration_ms", 0)
 
         self.store.record_recovery(
-            self.run_id, recovery_id,
+            self.run_id,
+            recovery_id,
             **results,
             all_recovered=all_ok,
             recovery_time_ms=round(recovery_time, 1),
@@ -506,10 +516,13 @@ class MemoryTelemetry:
 
             total = self.mm.mem0.get_stats().get("total_facts", 0)
             garbage_total = dupes_entities + dupes_facts + obsolete_summaries + unused + temporary
-            garbage_ratio = round(garbage_total / max(total * 2, 1), 3)  # *2 to avoid >1 with dupes_entities
+            garbage_ratio = round(
+                garbage_total / max(total * 2, 1), 3
+            )  # *2 to avoid >1 with dupes_entities
 
             self.store.record_pollution(
-                self.run_id, step,
+                self.run_id,
+                step,
                 duplicate_entities=dupes_entities,
                 duplicate_facts=dupes_facts,
                 obsolete_summaries=obsolete_summaries,
@@ -533,7 +546,7 @@ class MemoryTelemetry:
         try:
             row = self.mm.sqlite.conn.execute(
                 "SELECT COUNT(*) as c FROM summaries WHERE created_at < ?",
-                (time.time() - 7 * 86400,)
+                (time.time() - 7 * 86400,),
             ).fetchone()
             return row["c"] if row else 0
         except Exception:
@@ -559,8 +572,7 @@ class MemoryTelemetry:
 
     # ── Bulk sampling ───────────────────────────────────
 
-    def sample_all(self, step: int, query: str = None,
-                   ground_truth_ids: list[str] = None):
+    def sample_all(self, step: int, query: str = None, ground_truth_ids: list[str] = None):
         """Run all memory metric samples at once."""
         self.sample_compression(step)
         self.sample_prompt_stability(step)

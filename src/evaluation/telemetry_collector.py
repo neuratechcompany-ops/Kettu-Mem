@@ -10,6 +10,7 @@ Agent Loop hook points:
   after_tool_call      → capture tool metrics
   after_step           → capture reflection + full step
 """
+
 import time
 from dataclasses import dataclass
 from typing import Optional
@@ -20,6 +21,7 @@ from .eval_store import EvalStore, StepMetrics
 @dataclass
 class StepTrace:
     """Raw data collected during one step of agent loop."""
+
     # Timing
     t_start: float = 0
     t_llm_done: float = 0
@@ -105,8 +107,7 @@ class TelemetryCollector:
         tc.end_step().record()
     """
 
-    def __init__(self, store: EvalStore, run_id: str,
-                 memory_manager=None, cognitive_runtime=None):
+    def __init__(self, store: EvalStore, run_id: str, memory_manager=None, cognitive_runtime=None):
         self.store = store
         self.run_id = run_id
         self.mm = memory_manager
@@ -115,7 +116,7 @@ class TelemetryCollector:
         self._trace: Optional[StepTrace] = None
         self._all_steps: list[dict] = []  # for after-the-fact exports
 
-    def new_step(self) -> 'TelemetryCollector':
+    def new_step(self) -> "TelemetryCollector":
         """Begin a new step trace."""
         self._step_id += 1
         self._trace = StepTrace(t_start=time.time())
@@ -145,8 +146,7 @@ class TelemetryCollector:
             if hasattr(trace, k):
                 setattr(trace, k, v)
 
-    def after_tools(self, tool_calls: list[dict] = None,
-                    tool_outputs: list[dict] = None, **kwargs):
+    def after_tools(self, tool_calls: list[dict] = None, tool_outputs: list[dict] = None, **kwargs):
         """Called after tool calls complete."""
         trace = self._assert_trace()
         trace.t_tools_done = time.time()
@@ -218,17 +218,14 @@ class TelemetryCollector:
                 completed = len(planning_state.completed_steps)
                 trace.plan_completion = (completed / total) * 100
             # Deviation: count plan revisions
-            trace.plan_revisions = getattr(planning_state, 'revision_count', 0)
+            trace.plan_revisions = getattr(planning_state, "revision_count", 0)
 
-    def set_retrieval_metrics(self, search_results: list = None,
-                              faiss_results: list = None):
+    def set_retrieval_metrics(self, search_results: list = None, faiss_results: list = None):
         """Set retrieval quality metrics."""
         trace = self._assert_trace()
         if faiss_results is not None:
             trace.relevant_memories_used = len(faiss_results)
-            trace.semantic_search_latency_ms = getattr(
-                self, '_last_faiss_latency', 0
-            )
+            trace.semantic_search_latency_ms = getattr(self, "_last_faiss_latency", 0)
 
     def build_step_metrics(self) -> StepMetrics:
         """Convert trace to StepMetrics dataclass."""
@@ -315,7 +312,11 @@ class TelemetryCollector:
                 t.mem0_facts_count = stats.get("mem0_stats", {}).get("total_facts", 0)
                 t.archive_growth_bytes = stats.get("l3_size_bytes", 0) or 0
                 # Check if memory was hit this step
-                mem0_hits = self.mm.mem0._last_search_hits if hasattr(self.mm.mem0, "_last_search_hits") else 0
+                mem0_hits = (
+                    self.mm.mem0._last_search_hits
+                    if hasattr(self.mm.mem0, "_last_search_hits")
+                    else 0
+                )
                 t.memory_hit = mem0_hits > 0
             except Exception:
                 pass

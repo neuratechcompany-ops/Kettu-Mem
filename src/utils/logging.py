@@ -14,6 +14,7 @@ Usage:
   logger = get_logger(__name__)
   logger.info("event_recorded", event_id="abc", latency_ms=12.3)
 """
+
 import sys
 import time
 import uuid
@@ -66,6 +67,7 @@ def get_latency_ms() -> float:
 
 # ── Structlog configuration ─────────────────────────────
 
+
 def setup_logging(log_level: str = None):
     """
     Configure structlog for Kettu Mem.
@@ -91,7 +93,8 @@ def setup_logging(log_level: str = None):
     ]
 
     structlog.configure(
-        processors=shared_processors + [
+        processors=shared_processors
+        + [
             structlog.stdlib.filter_by_level,
             structlog.stdlib.PositionalArgumentsFormatter(),
             structlog.processors.UnicodeDecoder(),
@@ -105,6 +108,7 @@ def setup_logging(log_level: str = None):
 
     # Configure stdlib logging to use structlog
     import logging
+
     logging.basicConfig(
         format="%(message)s",
         stream=sys.stdout,
@@ -123,6 +127,7 @@ def get_logger(name: str = None) -> structlog.BoundLogger:
 
 
 # ── Middleware for request logging ──────────────────────
+
 
 class LoggingMiddleware:
     """
@@ -160,7 +165,9 @@ class LoggingMiddleware:
             latency = get_latency_ms()
             logger.info(
                 "request_complete",
-                method=method, path=path, status=status_code,
+                method=method,
+                path=path,
+                status=status_code,
                 latency_ms=latency,
             )
         except Exception as e:

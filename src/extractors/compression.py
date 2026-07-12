@@ -17,6 +17,7 @@ Strategy:
   3. Store structured summary in SQLite
   4. Context builder uses summary instead of raw events
 """
+
 from dataclasses import dataclass
 from typing import Optional
 
@@ -24,6 +25,7 @@ from typing import Optional
 @dataclass
 class CompressionResult:
     """Output of one compression pass."""
+
     summary: str
     decisions: list[str]
     open_issues: list[str]
@@ -49,16 +51,34 @@ class CompressionEngine:
 
     # Decision keywords (RU + EN)
     DECISION_MARKERS = [
-        "решил", "решение", "decided", "decision",
-        "согласовано", "утверждено", "выбрал вариант",
-        "остановились на", "договорились", "принято",
-        "resolved", "agreed", "final decision",
+        "решил",
+        "решение",
+        "decided",
+        "decision",
+        "согласовано",
+        "утверждено",
+        "выбрал вариант",
+        "остановились на",
+        "договорились",
+        "принято",
+        "resolved",
+        "agreed",
+        "final decision",
     ]
 
     ISSUE_MARKERS = [
-        "todo", "нужно сделать", "осталось", "pending",
-        "не решено", "вопрос", "на потом", "позже",
-        "to do", "TBD", "backlog", "задача",
+        "todo",
+        "нужно сделать",
+        "осталось",
+        "pending",
+        "не решено",
+        "вопрос",
+        "на потом",
+        "позже",
+        "to do",
+        "TBD",
+        "backlog",
+        "задача",
     ]
 
     ENTITY_PATTERNS = [
@@ -66,7 +86,10 @@ class CompressionEngine:
         (r"проект[а-я]*\s+[\"«](.+?)[\"»]", "project"),
         (r"project\s+[\"](.+?)[\"]", "project"),
         # Tools
-        (r"(AmoCRM|Bitrix24|Яндекс\.Директ|Google\s*Analytics|Excel|Figma|Notion|Jira|Trello|Slack|Telegram|Miro)", "tool"),
+        (
+            r"(AmoCRM|Bitrix24|Яндекс\.Директ|Google\s*Analytics|Excel|Figma|Notion|Jira|Trello|Slack|Telegram|Miro)",
+            "tool",
+        ),
         # People
         (r"@(\w+)", "person"),
     ]
@@ -84,10 +107,14 @@ class CompressionEngine:
 
         if not range_events:
             return CompressionResult(
-                summary="", decisions=[], open_issues=[],
-                artifact_refs=[], entities=[],
+                summary="",
+                decisions=[],
+                open_issues=[],
+                artifact_refs=[],
+                entities=[],
                 compressed_range=(start_step, end_step),
-                events_compressed=0, tokens_saved=0,
+                events_compressed=0,
+                tokens_saved=0,
             )
 
         decisions = self._extract_decisions(range_events)
@@ -113,7 +140,6 @@ class CompressionEngine:
             summary_id=summary_id,
         )
 
-
         """
         Check if compression is needed and compress oldest uncompressed range.
 
@@ -125,6 +151,7 @@ class CompressionEngine:
         Returns CompressionResult if compression happened, None otherwise.
         """
         # Check if we have uncompressed events
+
     def incremental_compress(
         self,
         session_id: str,
@@ -217,6 +244,7 @@ class CompressionEngine:
     def _extract_entities(self, events: list[dict]) -> list[str]:
         """Extract named entities from messages."""
         import re
+
         entities = set()
         for e in events:
             if e["type"] != "message":
@@ -228,15 +256,18 @@ class CompressionEngine:
                     entities.add(m)
         return sorted(entities)[:20]
 
-    def _build_summary(self, events: list[dict], decisions: list[str],
-                        issues: list[str], entities: list[str]) -> str:
+    def _build_summary(
+        self, events: list[dict], decisions: list[str], issues: list[str], entities: list[str]
+    ) -> str:
         user_msgs = [e for e in events if e["role"] == "user" and e["type"] == "message"]
         assistant_msgs = [e for e in events if e["role"] == "assistant" and e["type"] == "message"]
         errors = [e for e in events if e["type"] == "error"]
 
         parts = []
         parts.append(f"# Stage Summary (steps {events[0]['step_id']}-{events[-1]['step_id']})")
-        parts.append(f"Events: {len(events)} total ({len(user_msgs)} user, {len(assistant_msgs)} assistant, {len(errors)} errors)")
+        parts.append(
+            f"Events: {len(events)} total ({len(user_msgs)} user, {len(assistant_msgs)} assistant, {len(errors)} errors)"
+        )
 
         # User intents
         if user_msgs:
@@ -278,6 +309,7 @@ class CompressionEngine:
     def _estimate_tokens_saved(self, events: list[dict], summary: str) -> int:
         try:
             import tiktoken
+
             enc = tiktoken.get_encoding("cl100k_base")
         except (ImportError, ValueError, ModuleNotFoundError):
             return len(events) * 50

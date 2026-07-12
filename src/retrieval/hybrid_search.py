@@ -14,6 +14,7 @@ Usage:
   retriever = HybridRetriever(faiss_index, sqlite_index)
   results = retriever.search("query text", k=10)
 """
+
 import re
 import time
 from collections import defaultdict
@@ -62,7 +63,7 @@ class BM25Scorer:
 
     def _tokenize(self, text: str) -> list[str]:
         """Simple tokenizer: lowercase, split on non-alphanumeric."""
-        return re.findall(r'\w+', text.lower())
+        return re.findall(r"\w+", text.lower())
 
     def search(self, query: str, k: int = 10) -> list[tuple[int, float]]:
         """Search and return [(doc_idx, bm25_score), ...]."""
@@ -117,14 +118,16 @@ class HybridRetriever:
         for r in rows:
             content = r["content_preview"] or ""
             if len(content) >= settings.ingest_min_content_length:
-                documents.append((
-                    content,
-                    {
-                        "event_id": r["event_id"],
-                        "role": r["role"],
-                        "type": r["type"],
-                    }
-                ))
+                documents.append(
+                    (
+                        content,
+                        {
+                            "event_id": r["event_id"],
+                            "role": r["role"],
+                            "type": r["type"],
+                        },
+                    )
+                )
 
         self.bm25.index(documents)
         self._bm25_indexed = True
@@ -133,14 +136,14 @@ class HybridRetriever:
         """Normalize query before search."""
         query = query.strip().lower()
         # Remove excessive punctuation
-        query = re.sub(r'[^\w\s]', ' ', query)
+        query = re.sub(r"[^\w\s]", " ", query)
         # Collapse whitespace
-        query = re.sub(r'\s+', ' ', query)
+        query = re.sub(r"\s+", " ", query)
         return query
 
-    def search(self, query: str, k: int = None,
-               bm25_weight: float = None,
-               faiss_weight: float = None) -> list[dict]:
+    def search(
+        self, query: str, k: int = None, bm25_weight: float = None, faiss_weight: float = None
+    ) -> list[dict]:
         """
         Hybrid search with RRF fusion.
 
@@ -165,8 +168,7 @@ class HybridRetriever:
             faiss_id = r["faiss_id"]
             # Resolve faiss_id to event
             rows = self.sqlite.conn.execute(
-                "SELECT event_id, chunk_text FROM vector_map WHERE faiss_id = ?",
-                (faiss_id,)
+                "SELECT event_id, chunk_text FROM vector_map WHERE faiss_id = ?", (faiss_id,)
             ).fetchall()
             for vr in rows:
                 # Find corresponding BM25 doc_idx
@@ -194,15 +196,17 @@ class HybridRetriever:
         for doc_idx, score in sorted_docs:
             if doc_idx < len(self.bm25._documents):
                 _text, meta = self.bm25._documents[doc_idx]
-                results.append({
-                    "event_id": meta.get("event_id", ""),
-                    "score": round(score, 4),
-                    "bm25_rank": bm25_ranks.get(doc_idx, -1),
-                    "faiss_rank": faiss_ranks.get(doc_idx, -1),
-                    "content_preview": _text[:200],
-                    "role": meta.get("role", "?"),
-                    "type": meta.get("type", "?"),
-                })
+                results.append(
+                    {
+                        "event_id": meta.get("event_id", ""),
+                        "score": round(score, 4),
+                        "bm25_rank": bm25_ranks.get(doc_idx, -1),
+                        "faiss_rank": faiss_ranks.get(doc_idx, -1),
+                        "content_preview": _text[:200],
+                        "role": meta.get("role", "?"),
+                        "type": meta.get("type", "?"),
+                    }
+                )
 
         total_time_ms = (time.time() - t0) * 1000
         # Attach timing to results (debug)

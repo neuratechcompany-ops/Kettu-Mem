@@ -3,6 +3,7 @@ Security tests for Kettu Mem v0.2.1.
 
 Tests: API key auth, Pydantic validation, rate limiting, public endpoints.
 """
+
 import shutil
 import sys
 import tempfile
@@ -17,6 +18,7 @@ import pytest
 def _clear_module_state():
     """Reset global state between tests."""
     import api.server as server_module
+
     server_module._mm = None
     server_module._cr = None
     server_module._data_dir = ""
@@ -39,6 +41,7 @@ class TestAPIKeyAuthDirect:
     def test_enabled_with_key(self):
         """APIKeyAuth is enabled when key is provided."""
         from api.security import APIKeyAuth
+
         auth = APIKeyAuth("my-secret-key")
         assert auth._enabled is True
         assert auth.api_key == "my-secret-key"
@@ -48,10 +51,12 @@ class TestAPIKeyAuthDirect:
         monkeypatch.delenv("HERMES_MEMORY_API_KEY", raising=False)
         monkeypatch.delenv("KETTU_MEM_API_KEY", raising=False)
         from config import settings
+
         old = settings.api_key
         settings.api_key = None
         try:
             from api.security import APIKeyAuth
+
             auth = APIKeyAuth()
             assert auth._enabled is False
         finally:
@@ -60,8 +65,10 @@ class TestAPIKeyAuthDirect:
     def test_env_var_priority(self, monkeypatch):
         """HERMES_MEMORY_API_KEY takes priority over settings."""
         from api.security import _get_api_key
+
         monkeypatch.setenv("HERMES_MEMORY_API_KEY", "hermes-secret")
         from config import settings
+
         old = settings.api_key
         settings.api_key = "settings-secret"
         try:
@@ -77,12 +84,14 @@ class TestSecurityMiddlewareApp:
     def test_security_middleware_present(self):
         """SecurityMiddleware is in app.user_middleware."""
         from api.server import app
+
         names = [m.cls.__name__ for m in app.user_middleware]
         assert "SecurityMiddleware" in names, f"Not found in: {names}"
 
     def test_cors_and_security_both_present(self):
         """Both CORS and Security middleware are registered."""
         from api.server import app
+
         names = [m.cls.__name__ for m in app.user_middleware]
         assert "CORSMiddleware" in names
         assert "SecurityMiddleware" in names
@@ -90,6 +99,7 @@ class TestSecurityMiddlewareApp:
     def test_cors_outermost_security_inner(self):
         """CORS is outermost, Security runs between CORS and app."""
         from api.server import app
+
         names = [m.cls.__name__ for m in app.user_middleware]
         # user_middleware order is the order they were added.
         # Starlette wraps them LIFO: first added = outermost.
@@ -108,8 +118,9 @@ class TestSecurityMiddlewareApp:
         # Actually: Starlette middleware stack: last added goes on top (outermost).
         # So in user_middleware, first element was added first (innermost).
         # For CORS to be outermost, it should be last in user_middleware.
-        assert cors_pos > sec_pos, \
-            f"CORS should be outermost (after Security in list): CORS={cors_pos}, Security={sec_pos}, list={names}"
+        assert (
+            cors_pos > sec_pos
+        ), f"CORS should be outermost (after Security in list): CORS={cors_pos}, Security={sec_pos}, list={names}"
 
 
 class TestHealthPublicEndpoints:
@@ -119,6 +130,7 @@ class TestHealthPublicEndpoints:
         import asyncio
 
         from api.server import health
+
         result = asyncio.new_event_loop().run_until_complete(health())
         assert result["status"] == "ok"
 
@@ -128,6 +140,7 @@ class TestRateLimitingDirect:
 
     def test_rate_limiter_blocks_after_limit(self):
         from api.security import RateLimiter
+
         rl = RateLimiter()
         rl.max_requests = 3
         rl.window = 60
@@ -142,6 +155,7 @@ class TestRateLimitingDirect:
 
     def test_different_ips_not_blocked(self):
         from api.security import RateLimiter
+
         rl = RateLimiter()
         rl.max_requests = 3
         rl.window = 60
@@ -156,6 +170,7 @@ class TestRateLimitingDirect:
         from unittest.mock import MagicMock
 
         from api.security import RateLimiter
+
         rl = RateLimiter()
         mock_req = MagicMock()
         mock_req.headers = {"X-Forwarded-For": "10.0.0.1, 10.0.0.2"}
@@ -169,18 +184,21 @@ class TestPydanticValidation:
 
     def test_session_start_valid(self):
         from api.security import SessionStartRequest
+
         r = SessionStartRequest(session_id="test", project_id="p1")
         assert r.session_id == "test"
         assert r.project_id == "p1"
 
     def test_session_start_defaults(self):
         from api.security import SessionStartRequest
+
         r = SessionStartRequest()
         assert r.session_id == ""
         assert r.project_id == "default"
 
     def test_turn_before_valid(self):
         from api.security import TurnBeforeRequest
+
         r = TurnBeforeRequest(query="hello", strategy="normal", token_budget=32000)
         assert r.query == "hello"
         assert r.token_budget == 32000
@@ -189,18 +207,19 @@ class TestPydanticValidation:
         import pydantic
 
         from api.security import TurnBeforeRequest
+
         with pytest.raises(pydantic.ValidationError):
             TurnBeforeRequest(token_budget=-5)
 
     def test_turn_after_valid(self):
         from api.security import TurnAfterRequest
-        r = TurnAfterRequest(events=[
-            {"role": "user", "type": "message", "content": "test"}
-        ])
+
+        r = TurnAfterRequest(events=[{"role": "user", "type": "message", "content": "test"}])
         assert len(r.events) == 1
 
     def test_mem0_add_valid(self):
         from api.security import Mem0AddRequest
+
         r = Mem0AddRequest(type="fact", content="Test fact", confidence=0.8)
         assert r.confidence == 0.8
 
@@ -208,6 +227,7 @@ class TestPydanticValidation:
         import pydantic
 
         from api.security import Mem0AddRequest
+
         with pytest.raises(pydantic.ValidationError):
             Mem0AddRequest(confidence=2.0)
 
@@ -217,26 +237,31 @@ class TestInputSanitizer:
 
     def test_sql_injection_removed(self):
         from api.security import InputSanitizer
+
         result = InputSanitizer.sanitize("SELECT * FROM users WHERE 1=1")
         assert "SELECT" not in result
 
     def test_script_tags_removed(self):
         from api.security import InputSanitizer
+
         result = InputSanitizer.sanitize("<script>alert('xss')</script>")
         assert "<script>" not in result
 
     def test_null_bytes_removed(self):
         from api.security import InputSanitizer
+
         result = InputSanitizer.sanitize("hello\x00world")
         assert "\x00" not in result
 
     def test_normal_text_passes(self):
         from api.security import InputSanitizer
+
         result = InputSanitizer.sanitize("Normal text")
         assert result == "Normal text"
 
     def test_none_passes(self):
         from api.security import InputSanitizer
+
         assert InputSanitizer.sanitize(None) is None
 
 
@@ -277,38 +302,37 @@ class Test422ValidationErrors:
 
     def test_cognitive_start_422_plan_not_list(self, client):
         """CognitiveStartRequest: plan must be a list of strings."""
-        resp = client.post("/cognitive/start", json={
-            "goal": "test",
-            "plan": "not_a_list",
-            "space": "project"
-        })
+        resp = client.post(
+            "/cognitive/start", json={"goal": "test", "plan": "not_a_list", "space": "project"}
+        )
         assert resp.status_code == 422, f"Expected 422, got {resp.status_code}"
 
     def test_cognitive_context_422_token_budget_string(self, client):
         """CognitiveContextRequest: token_budget must be int."""
-        resp = client.post("/cognitive/context", json={
-            "query": "test",
-            "token_budget": "not_an_int"
-        })
+        resp = client.post(
+            "/cognitive/context", json={"query": "test", "token_budget": "not_an_int"}
+        )
         assert resp.status_code == 422, f"Expected 422, got {resp.status_code}"
 
     def test_cognitive_step_422_tool_calls_not_list(self, client):
         """CognitiveStepRequest: tool_calls must be a list of dicts."""
-        resp = client.post("/cognitive/step", json={
-            "response": "some response",
-            "tool_calls": "not_a_list",
-            "tool_outputs": [],
-            "user_input": ""
-        })
+        resp = client.post(
+            "/cognitive/step",
+            json={
+                "response": "some response",
+                "tool_calls": "not_a_list",
+                "tool_outputs": [],
+                "user_input": "",
+            },
+        )
         assert resp.status_code == 422, f"Expected 422, got {resp.status_code}"
 
     def test_cognitive_reflect_422_tool_outputs_not_list(self, client):
         """CognitiveReflectRequest: tool_outputs must be a list of dicts."""
-        resp = client.post("/cognitive/reflect", json={
-            "response": "some reflection",
-            "tool_calls": [],
-            "tool_outputs": "not_a_list"
-        })
+        resp = client.post(
+            "/cognitive/reflect",
+            json={"response": "some reflection", "tool_calls": [], "tool_outputs": "not_a_list"},
+        )
         assert resp.status_code == 422, f"Expected 422, got {resp.status_code}"
 
     def test_cognitive_space_422_space_not_str(self, client):
@@ -334,6 +358,7 @@ class TestHTTPAuthWithKey:
 
         import api.security
         import api.server
+
         importlib.reload(api.security)
         importlib.reload(api.server)
 
@@ -343,6 +368,7 @@ class TestHTTPAuthWithKey:
         server._cr = None
 
         from fastapi.testclient import TestClient
+
         with TestClient(server.app, raise_server_exceptions=False) as tc:
             yield tc
 

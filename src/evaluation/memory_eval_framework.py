@@ -10,6 +10,7 @@ CLI Commands:
 
 Independent from agent-level Evaluation Framework.
 """
+
 import json
 import sys
 import time
@@ -25,8 +26,7 @@ from .mes_calculator import MESCalculator
 class MemoryEvaluationFramework:
     """Orchestrator for memory evaluation."""
 
-    def __init__(self, data_dir: str = None,
-                 memory_manager=None):
+    def __init__(self, data_dir: str = None, memory_manager=None):
         self.store = MemoryEvalStore(data_dir)
         self.metrics_engine = MemoryMetricsEngine()
         self.mes_calculator = MESCalculator()
@@ -67,30 +67,48 @@ class MemoryEvaluationFramework:
             prompt_snapshots=self.store.get_prompt_stability_curve(rid),
             retrieval_snapshots=self.store.get_all_retrieval(rid),
             mem0_snapshots=self.store.get_all_mem0(rid) or [],
-            archive_checks=[dict(r) for r in self.store.conn.execute(
-                "SELECT * FROM archive_checks WHERE run_id=? ORDER BY step", (rid,)
-            ).fetchall()],
-            context_snapshots=[dict(r) for r in self.store.conn.execute(
-                "SELECT * FROM context_snapshots WHERE run_id=? ORDER BY step", (rid,)
-            ).fetchall()],
-            semantic_snapshots=[dict(r) for r in self.store.conn.execute(
-                "SELECT * FROM semantic_snapshots WHERE run_id=? ORDER BY step", (rid,)
-            ).fetchall()],
-            recovery_logs=[dict(r) for r in self.store.conn.execute(
-                "SELECT * FROM recovery_logs WHERE run_id=? ORDER BY recovery_id", (rid,)
-            ).fetchall()],
-            pollution_snapshots=[dict(r) for r in self.store.conn.execute(
-                "SELECT * FROM pollution_snapshots WHERE run_id=? ORDER BY step", (rid,)
-            ).fetchall()],
+            archive_checks=[
+                dict(r)
+                for r in self.store.conn.execute(
+                    "SELECT * FROM archive_checks WHERE run_id=? ORDER BY step", (rid,)
+                ).fetchall()
+            ],
+            context_snapshots=[
+                dict(r)
+                for r in self.store.conn.execute(
+                    "SELECT * FROM context_snapshots WHERE run_id=? ORDER BY step", (rid,)
+                ).fetchall()
+            ],
+            semantic_snapshots=[
+                dict(r)
+                for r in self.store.conn.execute(
+                    "SELECT * FROM semantic_snapshots WHERE run_id=? ORDER BY step", (rid,)
+                ).fetchall()
+            ],
+            recovery_logs=[
+                dict(r)
+                for r in self.store.conn.execute(
+                    "SELECT * FROM recovery_logs WHERE run_id=? ORDER BY recovery_id", (rid,)
+                ).fetchall()
+            ],
+            pollution_snapshots=[
+                dict(r)
+                for r in self.store.conn.execute(
+                    "SELECT * FROM pollution_snapshots WHERE run_id=? ORDER BY step", (rid,)
+                ).fetchall()
+            ],
         )
 
         mes_result = self.mes_calculator.calculate(metrics)
 
         # Save to store
-        self.store.save_memory_metrics(rid, {
-            "mes": mes_result["mes"],
-            **metrics,
-        })
+        self.store.save_memory_metrics(
+            rid,
+            {
+                "mes": mes_result["mes"],
+                **metrics,
+            },
+        )
 
         report = {
             "run_id": rid,
@@ -112,8 +130,11 @@ class MemoryEvaluationFramework:
 
         for i in range(1, 6):
             name = [
-                "50 events", "500 events", "1000 events",
-                "Restart Recovery", "Memory Pollution"
+                "50 events",
+                "500 events",
+                "1000 events",
+                "Restart Recovery",
+                "Memory Pollution",
             ][i - 1]
             print(f"\n── Benchmark {i}: {name} ──")
 
@@ -151,15 +172,23 @@ class MemoryEvaluationFramework:
         for step in range(n):
             # Generate synthetic event
             role = "user" if step % 2 == 0 else "assistant"
-            content = f"Benchmark event {step}: sample content for memory evaluation testing purposes."
-            memory_manager.record_event(role, "message", content,
-                                       refs=[f"ref-{step-1}"] if step > 0 else [],
-                                       meta={"bench": True, "step": step})
+            content = (
+                f"Benchmark event {step}: sample content for memory evaluation testing purposes."
+            )
+            memory_manager.record_event(
+                role,
+                "message",
+                content,
+                refs=[f"ref-{step-1}"] if step > 0 else [],
+                meta={"bench": True, "step": step},
+            )
 
             # Telemetry
-            mt.sample_all(step,
-                          query=content if step % 10 == 0 else None,
-                          ground_truth_ids=[f"ref-{step-5}"] if step >= 5 else None)
+            mt.sample_all(
+                step,
+                query=content if step % 10 == 0 else None,
+                ground_truth_ids=[f"ref-{step-5}"] if step >= 5 else None,
+            )
 
             # Set prompt estimate
             stats = memory_manager.get_archive_stats()
@@ -223,15 +252,27 @@ class MemoryEvaluationFramework:
         for step in range(100):
             if step % 10 == 0:
                 # Duplicate event
-                mm.record_event("user", "message", "Repeat: I prefer dark mode",
-                               meta={"bench": True, "step": step})
+                mm.record_event(
+                    "user",
+                    "message",
+                    "Repeat: I prefer dark mode",
+                    meta={"bench": True, "step": step},
+                )
             elif step % 7 == 0:
                 # Similar but not duplicate
-                mm.record_event("user", "message", "I would like dark mode enabled",
-                               meta={"bench": True, "step": step})
+                mm.record_event(
+                    "user",
+                    "message",
+                    "I would like dark mode enabled",
+                    meta={"bench": True, "step": step},
+                )
             else:
-                mm.record_event("user", "message", f"Unique event {step} with different content for diversity",
-                               meta={"bench": True, "step": step})
+                mm.record_event(
+                    "user",
+                    "message",
+                    f"Unique event {step} with different content for diversity",
+                    meta={"bench": True, "step": step},
+                )
             mt.sample_all(step)
             mt.set_last_prompt_tokens(800)
 
@@ -281,7 +322,9 @@ class MemoryEvaluationFramework:
             print(f"   Run B: {report_b['mes']['mes']}/100")
             for ba, bb in zip(report_a["mes"]["breakdown"], report_b["mes"]["breakdown"]):
                 d = bb["contribution"] - ba["contribution"]
-                print(f"   {'↑' if d > 0 else '↓' if d < 0 else '→'} {ba['component']:<22s} {d:+5.1f}")
+                print(
+                    f"   {'↑' if d > 0 else '↓' if d < 0 else '→'} {ba['component']:<22s} {d:+5.1f}"
+                )
 
         elif cmd == "doctor":
             stats = mef.store.get_stats()
@@ -321,7 +364,9 @@ class MemoryEvaluationFramework:
             for r in runs:
                 m = mef.store.get_memory_metrics(r["run_id"])
                 mes = f"{m['mes_score']:.0f}" if m and m.get("mes_score") else "N/A"
-                print(f"  {r['run_id']:<14s} {r['task_name']:<24s} MES={mes:>5s} events={r.get('total_events','?')}")
+                print(
+                    f"  {r['run_id']:<14s} {r['task_name']:<24s} MES={mes:>5s} events={r.get('total_events','?')}"
+                )
 
         else:
             print(f"Unknown: {cmd}")
@@ -331,6 +376,7 @@ class MemoryEvaluationFramework:
     def _load_mm():
         try:
             from memory_manager import MemoryManager
+
             return MemoryManager(str(Path.home() / ".openclaw/memory-store"))
         except ImportError:
             return None

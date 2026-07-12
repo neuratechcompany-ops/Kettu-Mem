@@ -10,6 +10,7 @@ Validates:
   5. No repeated useless tool calls (tool intelligence)
   6. Goal, Plan, Session State correctly recovered
 """
+
 import json
 import sys
 import time
@@ -21,14 +22,16 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 # ── Test API client ─────────────────────────────────────
 
+
 class CRClient:
     def __init__(self, base="http://127.0.0.1:8765"):
         self.base = base
 
     def _post(self, path, data):
         body = json.dumps(data).encode()
-        req = urllib.request.Request(f"{self.base}{path}", data=body,
-                                     headers={"Content-Type": "application/json"})
+        req = urllib.request.Request(
+            f"{self.base}{path}", data=body, headers={"Content-Type": "application/json"}
+        )
         with urllib.request.urlopen(req) as r:
             return json.loads(r.read())
 
@@ -46,12 +49,15 @@ class CRClient:
         return self._post("/cognitive/context", {"query": query, "token_budget": budget})
 
     def record_step(self, response, tool_calls=None, tool_outputs=None, user_input=""):
-        return self._post("/cognitive/step", {
-            "response": response,
-            "tool_calls": tool_calls or [],
-            "tool_outputs": tool_outputs or [],
-            "user_input": user_input,
-        })
+        return self._post(
+            "/cognitive/step",
+            {
+                "response": response,
+                "tool_calls": tool_calls or [],
+                "tool_outputs": tool_outputs or [],
+                "user_input": user_input,
+            },
+        )
 
     def get_state(self):
         return self._get("/cognitive/state")
@@ -66,12 +72,24 @@ class CRClient:
 # ── Simulated agent step ────────────────────────────────
 
 TOPICS = [
-    "market research", "competitor analysis", "pricing strategy",
-    "feature prioritization", "launch planning", "budget allocation",
-    "channel strategy", "content marketing", "SEO optimization",
-    "email campaigns", "social media", "analytics setup",
-    "A/B testing", "conversion optimization", "customer journey",
-    "retention strategy", "brand positioning", "PR outreach",
+    "market research",
+    "competitor analysis",
+    "pricing strategy",
+    "feature prioritization",
+    "launch planning",
+    "budget allocation",
+    "channel strategy",
+    "content marketing",
+    "SEO optimization",
+    "email campaigns",
+    "social media",
+    "analytics setup",
+    "A/B testing",
+    "conversion optimization",
+    "customer journey",
+    "retention strategy",
+    "brand positioning",
+    "PR outreach",
 ]
 
 TOOLS = ["web_search", "analyze_data", "write", "read", "create_report"]
@@ -84,8 +102,9 @@ TOOL_OUTPUT_TEMPLATES = {
 }
 
 
-def simulate_agent_step(step_num: int, topic_idx: int, client: CRClient,
-                        useless_patterns: set) -> dict:
+def simulate_agent_step(
+    step_num: int, topic_idx: int, client: CRClient, useless_patterns: set
+) -> dict:
     """Simulate one agent step with tool calls and reflection."""
     topic = TOPICS[topic_idx % len(TOPICS)]
 
@@ -98,10 +117,15 @@ def simulate_agent_step(step_num: int, topic_idx: int, client: CRClient,
         tool_calls.append({"name": tool, "params": {"query": topic}})
 
     if step_num % 7 == 0 and "write" not in useless_patterns:
-        tool_calls.append({"name": "write", "params": {
-            "filename": f"report-step-{step_num}.md",
-            "content": f"## Step {step_num}\nAnalysis of {topic}"
-        }})
+        tool_calls.append(
+            {
+                "name": "write",
+                "params": {
+                    "filename": f"report-step-{step_num}.md",
+                    "content": f"## Step {step_num}\nAnalysis of {topic}",
+                },
+            }
+        )
 
     # Simulate tool outputs
     tool_outputs = []
@@ -109,30 +133,45 @@ def simulate_agent_step(step_num: int, topic_idx: int, client: CRClient,
         name = tc["name"]
         params = tc.get("params", {})
         if name == "web_search":
-            tool_outputs.append({"type": "tool_output", "content":
-                TOOL_OUTPUT_TEMPLATES["web_search"].format(
-                    query=params.get("query", ""), n=step_num % 50 + 5,
-                    insight=f"Trend #{step_num % 10}: market growing"
-                )})
+            tool_outputs.append(
+                {
+                    "type": "tool_output",
+                    "content": TOOL_OUTPUT_TEMPLATES["web_search"].format(
+                        query=params.get("query", ""),
+                        n=step_num % 50 + 5,
+                        insight=f"Trend #{step_num % 10}: market growing",
+                    ),
+                }
+            )
         elif name == "analyze_data":
-            tool_outputs.append({"type": "tool_output", "content":
-                TOOL_OUTPUT_TEMPLATES["analyze_data"].format(
-                    n=step_num * 100, mean=step_num % 100, median=step_num % 80
-                )})
+            tool_outputs.append(
+                {
+                    "type": "tool_output",
+                    "content": TOOL_OUTPUT_TEMPLATES["analyze_data"].format(
+                        n=step_num * 100, mean=step_num % 100, median=step_num % 80
+                    ),
+                }
+            )
         elif name == "write":
             size = 500 + step_num * 10
-            tool_outputs.append({"type": "tool_output", "content":
-                TOOL_OUTPUT_TEMPLATES["write"].format(
-                    filename=params.get("filename", ""), size=size
-                )})
+            tool_outputs.append(
+                {
+                    "type": "tool_output",
+                    "content": TOOL_OUTPUT_TEMPLATES["write"].format(
+                        filename=params.get("filename", ""), size=size
+                    ),
+                }
+            )
         else:
-            tool_outputs.append({"type": "tool_output",
-                "content": f"Tool '{name}' completed successfully."})
+            tool_outputs.append(
+                {"type": "tool_output", "content": f"Tool '{name}' completed successfully."}
+            )
 
     # Simulate errors occasionally
     if step_num % 23 == 0:
-        tool_outputs.append({"type": "error",
-            "content": "API rate limit exceeded. Please retry later."})
+        tool_outputs.append(
+            {"type": "error", "content": "API rate limit exceeded. Please retry later."}
+        )
 
     # Assistant response
     response = (
@@ -149,8 +188,7 @@ def simulate_agent_step(step_num: int, topic_idx: int, client: CRClient,
     }
 
 
-def run_test(client: CRClient, project_name: str, steps: int,
-             start_step: int = 0) -> dict:
+def run_test(client: CRClient, project_name: str, steps: int, start_step: int = 0) -> dict:
     """Run N steps of simulated agent."""
     token_history = []
     useless_patterns = set()
@@ -170,8 +208,10 @@ def run_test(client: CRClient, project_name: str, steps: int,
 
         # Record step
         result = client.record_step(
-            step["response"], step["tool_calls"], step["tool_outputs"],
-            user_input=f"Analyze {TOPICS[topic_idx % len(TOPICS)]}"
+            step["response"],
+            step["tool_calls"],
+            step["tool_outputs"],
+            user_input=f"Analyze {TOPICS[topic_idx % len(TOPICS)]}",
         )
 
         # Track reflection outcomes
@@ -187,8 +227,10 @@ def run_test(client: CRClient, project_name: str, steps: int,
             useless_patterns.add(t)
 
         if (step_num + 1) % 100 == 0:
-            print(f"  [{project_name}] Step {step_num + 1}/{start_step + steps}: "
-                  f"tokens={tokens}, outcomes={reflection_outcomes}")
+            print(
+                f"  [{project_name}] Step {step_num + 1}/{start_step + steps}: "
+                f"tokens={tokens}, outcomes={reflection_outcomes}"
+            )
 
     return {
         "token_history": token_history,
@@ -200,6 +242,7 @@ def run_test(client: CRClient, project_name: str, steps: int,
 
 
 # ── Main test ───────────────────────────────────────────
+
 
 def main():
     print("=" * 60)
@@ -241,8 +284,10 @@ def main():
 
     tokens = result["token_history"]
     print(f"\n  ✅ Completed {result['total_steps']} steps in {elapsed:.1f}s")
-    print(f"  📏 Tokens: first={tokens[0]}, last={tokens[-1]}, "
-          f"avg={sum(tokens)//len(tokens)}, max={max(tokens)}")
+    print(
+        f"  📏 Tokens: first={tokens[0]}, last={tokens[-1]}, "
+        f"avg={sum(tokens)//len(tokens)}, max={max(tokens)}"
+    )
 
     # Check: token growth should be bounded
     first_100 = tokens[:100]
@@ -275,9 +320,9 @@ def main():
     print(f"  Post-resume: {post_steps} steps, {post_completed} completed")
 
     state_preserved = (
-        post_steps == pre_steps and
-        post_completed == pre_completed and
-        post_state.get("planning", {}).get("goal") == pre_state.get("planning", {}).get("goal")
+        post_steps == pre_steps
+        and post_completed == pre_completed
+        and post_state.get("planning", {}).get("goal") == pre_state.get("planning", {}).get("goal")
     )
     print(f"  State preserved: {'✅' if state_preserved else '❌'}")
 
@@ -297,7 +342,7 @@ def main():
         pc.start_task(
             f"Complete {proj_name} tasks",
             ["Research", "Analyze", "Build", "Test", "Deploy"],
-            "project"
+            "project",
         )
         proj_result = run_test(pc, proj_name, 30, 0)
         project_results[proj_name] = {
@@ -305,8 +350,10 @@ def main():
             "tokens_avg": sum(proj_result["token_history"]) // len(proj_result["token_history"]),
             "progress": proj_result["final_state"].get("planning", {}).get("progress", "?"),
         }
-        print(f"  {proj_name}: {proj_result['total_steps']} steps, "
-              f"avg tokens={project_results[proj_name]['tokens_avg']}")
+        print(
+            f"  {proj_name}: {proj_result['total_steps']} steps, "
+            f"avg tokens={project_results[proj_name]['tokens_avg']}"
+        )
 
     # ═══ FINAL REPORT ═══
     print(f"\n{'='*60}")
@@ -318,7 +365,9 @@ def main():
     print(f"\n  {'✅' if c1 else '❌'} 500+ steps: {result['total_steps']} steps")
 
     # Criterion 2: restart recovery
-    print(f"  {'✅' if state_preserved else '❌'} Restart recovery: state={'preserved' if state_preserved else 'LOST'}")
+    print(
+        f"  {'✅' if state_preserved else '❌'} Restart recovery: state={'preserved' if state_preserved else 'LOST'}"
+    )
 
     # Criterion 3: multiple projects
     c3 = len(project_results) >= 3 and all(r["steps"] >= 30 for r in project_results.values())
@@ -326,8 +375,10 @@ def main():
 
     # Criterion 4: no linear prompt growth
     c4 = growth_ratio < 5
-    print(f"  {'✅' if c4 else '⚠'} Prompt stability: {growth_ratio:.1f}x growth "
-          f"({'stable' if c4 else 'growing'} — linear would be ~{result['total_steps']}x)")
+    print(
+        f"  {'✅' if c4 else '⚠'} Prompt stability: {growth_ratio:.1f}x growth "
+        f"({'stable' if c4 else 'growing'} — linear would be ~{result['total_steps']}x)"
+    )
 
     # Criterion 5: no repeated useless tool calls
     useless_total = sum(len(r["useless_patterns"]) for r in [result, result2])
@@ -336,8 +387,10 @@ def main():
 
     # Criterion 6: Goal + Plan + Session State recovered
     c6 = state_preserved and pre_state.get("planning", {}).get("goal", "")
-    print(f"  {'✅' if c6 else '❌'} Goal/Plan/State recovery: "
-          f"goal='{pre_state.get('planning',{}).get('goal','')[:50]}...'")
+    print(
+        f"  {'✅' if c6 else '❌'} Goal/Plan/State recovery: "
+        f"goal='{pre_state.get('planning',{}).get('goal','')[:50]}...'"
+    )
 
     # Performance
     avg_ms = (elapsed / result["total_steps"]) * 1000

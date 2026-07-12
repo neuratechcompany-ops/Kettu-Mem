@@ -14,6 +14,7 @@ Separate from agent-level EvalStore. Focuses exclusively on:
 
 Storage path: ~/.openclaw/memory-evaluation-store/
 """
+
 import json
 import sqlite3
 import time
@@ -26,6 +27,7 @@ from typing import Optional
 @dataclass
 class PromptStabilitySnapshot:
     """Capture prompt vs history at key checkpoints."""
+
     step: int
     raw_history_tokens: int
     prompt_tokens: int
@@ -36,6 +38,7 @@ class PromptStabilitySnapshot:
 @dataclass
 class RetrievalSnapshot:
     """Detailed retrieval quality per checkpoint."""
+
     step: int
     recall_at_1: float = 0
     recall_at_3: float = 0
@@ -258,7 +261,7 @@ class MemoryEvalStore:
         self.conn.execute(
             "INSERT INTO memory_runs (run_id, session_id, task_name, start_time, status, created_at) "
             "VALUES (?, ?, ?, ?, 'running', ?)",
-            (run_id, session_id, task_name, time.time(), time.time())
+            (run_id, session_id, task_name, time.time(), time.time()),
         )
         self.conn.commit()
         return run_id
@@ -266,7 +269,7 @@ class MemoryEvalStore:
     def complete_run(self, run_id: str, total_events: int = 0):
         self.conn.execute(
             "UPDATE memory_runs SET end_time=?, total_events=?, status='completed' WHERE run_id=?",
-            (time.time(), total_events, run_id)
+            (time.time(), total_events, run_id),
         )
         self.conn.commit()
 
@@ -286,8 +289,7 @@ class MemoryEvalStore:
         columns = list(data.keys())
         placeholders = ", ".join(f":{c}" for c in columns)
         self.conn.execute(
-            f"INSERT OR REPLACE INTO {table} ({', '.join(columns)}) VALUES ({placeholders})",
-            data
+            f"INSERT OR REPLACE INTO {table} ({', '.join(columns)}) VALUES ({placeholders})", data
         )
         self.conn.commit()
 
@@ -334,28 +336,25 @@ class MemoryEvalStore:
         rows = self.conn.execute(
             "SELECT step, raw_history_tokens, prompt_tokens, growth_vs_first "
             "FROM prompt_snapshots WHERE run_id=? ORDER BY step",
-            (run_id,)
+            (run_id,),
         ).fetchall()
         return [dict(r) for r in rows]
 
     def get_all_compression(self, run_id: str) -> list[dict]:
         rows = self.conn.execute(
-            "SELECT * FROM compression_snapshots WHERE run_id=? ORDER BY step",
-            (run_id,)
+            "SELECT * FROM compression_snapshots WHERE run_id=? ORDER BY step", (run_id,)
         ).fetchall()
         return [dict(r) for r in rows]
 
     def get_all_retrieval(self, run_id: str) -> list[dict]:
         rows = self.conn.execute(
-            "SELECT * FROM retrieval_snapshots WHERE run_id=? ORDER BY step",
-            (run_id,)
+            "SELECT * FROM retrieval_snapshots WHERE run_id=? ORDER BY step", (run_id,)
         ).fetchall()
         return [dict(r) for r in rows]
 
     def get_all_mem0(self, run_id: str) -> list[dict]:
         rows = self.conn.execute(
-            "SELECT * FROM mem0_snapshots WHERE run_id=? ORDER BY step",
-            (run_id,)
+            "SELECT * FROM mem0_snapshots WHERE run_id=? ORDER BY step", (run_id,)
         ).fetchall()
         return [dict(r) for r in rows]
 
@@ -375,7 +374,9 @@ class MemoryEvalStore:
             "recovery_score": metrics.get("recovery", {}).get("raw_score", 0),
             "pollution_score": metrics.get("pollution", {}).get("raw_score", 0),
             "compression_ratio": metrics.get("compression", {}).get("compression_ratio", 0),
-            "prompt_growth_ratio": metrics.get("prompt_stability", {}).get("prompt_growth_ratio", 0),
+            "prompt_growth_ratio": metrics.get("prompt_stability", {}).get(
+                "prompt_growth_ratio", 0
+            ),
             "recall_at_5": metrics.get("retrieval", {}).get("recall_at_5", 0),
             "precision_at_5": metrics.get("retrieval", {}).get("precision_at_5", 0),
             "memory_hit_rate": metrics.get("mem0", {}).get("memory_hit_rate", 0),
@@ -383,7 +384,9 @@ class MemoryEvalStore:
             "pollution_pct": metrics.get("pollution", {}).get("garbage_ratio", 0),
             "avg_retrieval_ms": metrics.get("retrieval", {}).get("avg_search_latency_ms", 0),
             "context_build_ms": metrics.get("context_builder", {}).get("avg_build_latency_ms", 0),
-            "total_memory_overhead_ms": metrics.get("latency", {}).get("total_memory_overhead_ms", 0),
+            "total_memory_overhead_ms": metrics.get("latency", {}).get(
+                "total_memory_overhead_ms", 0
+            ),
             "prompt_leakage": metrics.get("context_builder", {}).get("raw_tool_outputs_count", 0),
             "data_json": json.dumps(metrics, ensure_ascii=False),
             "updated_at": time.time(),
@@ -391,15 +394,12 @@ class MemoryEvalStore:
         columns = ", ".join(params.keys())
         placeholders = ", ".join(f":{k}" for k in params.keys())
         self.conn.execute(
-            f"INSERT OR REPLACE INTO memory_metrics ({columns}) VALUES ({placeholders})",
-            params
+            f"INSERT OR REPLACE INTO memory_metrics ({columns}) VALUES ({placeholders})", params
         )
         self.conn.commit()
 
     def get_memory_metrics(self, run_id: str) -> Optional[dict]:
-        row = self.conn.execute(
-            "SELECT * FROM memory_metrics WHERE run_id=?", (run_id,)
-        ).fetchone()
+        row = self.conn.execute("SELECT * FROM memory_metrics WHERE run_id=?", (run_id,)).fetchone()
         return dict(row) if row else None
 
     def get_stats(self) -> dict:

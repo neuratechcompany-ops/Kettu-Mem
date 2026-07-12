@@ -22,11 +22,19 @@ class MemoryMetricsEngine:
     Output: dict with 9 component groups and MES component data.
     """
 
-    def calculate(self, run_meta: dict, compression_snapshots: list[dict],
-                  prompt_snapshots: list[dict], retrieval_snapshots: list[dict],
-                  mem0_snapshots: list[dict], archive_checks: list[dict],
-                  context_snapshots: list[dict], semantic_snapshots: list[dict],
-                  recovery_logs: list[dict], pollution_snapshots: list[dict]) -> dict:
+    def calculate(
+        self,
+        run_meta: dict,
+        compression_snapshots: list[dict],
+        prompt_snapshots: list[dict],
+        retrieval_snapshots: list[dict],
+        mem0_snapshots: list[dict],
+        archive_checks: list[dict],
+        context_snapshots: list[dict],
+        semantic_snapshots: list[dict],
+        recovery_logs: list[dict],
+        pollution_snapshots: list[dict],
+    ) -> dict:
         """
         Calculate all memory metrics from snapshot data.
 
@@ -54,9 +62,11 @@ class MemoryMetricsEngine:
             "recovery": self._calc_recovery(recovery_logs),
             "pollution": self._calc_pollution(pollution_snapshots),
             "latency": self._calc_latency(
-                retrieval_snapshots, context_snapshots,
-                semantic_snapshots, compression_snapshots,
-                recovery_logs
+                retrieval_snapshots,
+                context_snapshots,
+                semantic_snapshots,
+                compression_snapshots,
+                recovery_logs,
             ),
         }
 
@@ -439,10 +449,14 @@ class MemoryMetricsEngine:
         elif l3_ok and sqlite_ok and faiss_ok:
             score += 3
 
-        if l3_ok: score += 1
-        if sqlite_ok: score += 1
-        if faiss_ok: score += 1
-        if mem0_ok: score += 1
+        if l3_ok:
+            score += 1
+        if sqlite_ok:
+            score += 1
+        if faiss_ok:
+            score += 1
+        if mem0_ok:
+            score += 1
 
         if avg_time < 500 and all_recovered:
             score += 1  # fast recovery
@@ -487,7 +501,10 @@ class MemoryMetricsEngine:
             score += 2
         if obsolete == 0:
             score += 2
-        if unused / max(last.get("duplicate_facts", 1) + last.get("duplicate_entities", 1), 1) < 0.2:
+        if (
+            unused / max(last.get("duplicate_facts", 1) + last.get("duplicate_entities", 1), 1)
+            < 0.2
+        ):
             score += 1
 
         return {
@@ -505,13 +522,24 @@ class MemoryMetricsEngine:
 
     def _calc_latency(self, retrieval, context, semantic, compression, recovery) -> dict:
         # Average latencies per component
-        ret_lat = self._avg([r.get("search_latency_ms", 0) for r in retrieval if r.get("search_latency_ms")])
-        ctx_lat = self._avg([c.get("build_latency_ms", 0) for c in context if c.get("build_latency_ms")])
-        sem_lat = self._avg([s.get("search_latency_ms", 0) for s in semantic if s.get("search_latency_ms")])
-        rec_lat = self._avg([r.get("recovery_time_ms", 0) for r in recovery if r.get("recovery_time_ms")])
+        ret_lat = self._avg(
+            [r.get("search_latency_ms", 0) for r in retrieval if r.get("search_latency_ms")]
+        )
+        ctx_lat = self._avg(
+            [c.get("build_latency_ms", 0) for c in context if c.get("build_latency_ms")]
+        )
+        sem_lat = self._avg(
+            [s.get("search_latency_ms", 0) for s in semantic if s.get("search_latency_ms")]
+        )
+        rec_lat = self._avg(
+            [r.get("recovery_time_ms", 0) for r in recovery if r.get("recovery_time_ms")]
+        )
 
         # Compression latency is implicit (context build includes it)
-        comp_lat = self._avg([c.get("build_latency_ms", 0) for c in context if c.get("build_latency_ms")]) * 0.2
+        comp_lat = (
+            self._avg([c.get("build_latency_ms", 0) for c in context if c.get("build_latency_ms")])
+            * 0.2
+        )
 
         total_overhead = ret_lat + ctx_lat + sem_lat + rec_lat + comp_lat
 

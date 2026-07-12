@@ -24,6 +24,7 @@ Integration:
   report = ef.generate_report()
   print(HAESCalculator.format_report(report['haes']))
 """
+
 import json
 import sys
 from typing import Optional
@@ -44,8 +45,7 @@ class EvaluationFramework:
     3. Benchmark — run against saved baselines
     """
 
-    def __init__(self, data_dir: str = None,
-                 memory_manager=None, cognitive_runtime=None):
+    def __init__(self, data_dir: str = None, memory_manager=None, cognitive_runtime=None):
         self.store = EvalStore(data_dir)
         self.metrics_engine = MetricsEngine()
         self.haes_calculator = HAESCalculator()
@@ -58,9 +58,14 @@ class EvaluationFramework:
 
     # ── Run lifecycle ───────────────────────────────────
 
-    def start_run(self, task_name: str = "", task_description: str = "",
-                  goal: str = "", session_id: str = "",
-                  tags: list[str] = None) -> str:
+    def start_run(
+        self,
+        task_name: str = "",
+        task_description: str = "",
+        goal: str = "",
+        session_id: str = "",
+        tags: list[str] = None,
+    ) -> str:
         """Start a new evaluation run. Returns run_id."""
         run = self.store.create_run(
             task_name=task_name,
@@ -78,22 +83,26 @@ class EvaluationFramework:
             "start_time": run.start_time,
         }
         self.collector = TelemetryCollector(
-            self.store, run.run_id,
+            self.store,
+            run.run_id,
             memory_manager=self.mm,
             cognitive_runtime=self.cr,
         )
         print(f"[Eval] Run started: {run.run_id} — {task_name or '(unnamed)'}")
         return run.run_id
 
-    def stop_run(self, success: bool = True, fail_reason: str = "",
-                 artifact_path: str = "") -> dict:
+    def stop_run(
+        self, success: bool = True, fail_reason: str = "", artifact_path: str = ""
+    ) -> dict:
         """Complete the current run, compute metrics, and return report."""
         if not self.current_run_id:
             raise RuntimeError("No active run. Call start_run() first.")
 
         self.store.complete_run(
-            self.current_run_id, success=success,
-            fail_reason=fail_reason, artifact_path=artifact_path,
+            self.current_run_id,
+            success=success,
+            fail_reason=fail_reason,
+            artifact_path=artifact_path,
         )
 
         # Read back all steps
@@ -105,42 +114,50 @@ class EvaluationFramework:
         haes_result = self.haes_calculator.calculate(metrics)
 
         # Save metrics
-        self.store.save_metrics(self.current_run_id, {
-            "tts": metrics["tts"],
-            "haes": haes_result["haes"],
-            "memory_efficiency": metrics["memory_efficiency"]["raw_score"],
-            "retrieval_quality": metrics["retrieval_quality"]["raw_score"],
-            "planning_quality": metrics["planning_quality"]["raw_score"],
-            "reflection_value": metrics["reflection_value"]["raw_score"],
-            "tool_efficiency": metrics["tool_efficiency"]["raw_score"],
-            "context_efficiency": metrics["context_efficiency"]["raw_score"],
-            "latency": metrics["latency"]["raw_score"],
-            "recovery": metrics["recovery"]["raw_score"],
-            "learning_reuse": metrics["learning_reuse"]["raw_score"],
-            "total_steps": metrics["total_steps"],
-            "total_tool_calls": metrics["total_tool_calls"],
-            "prompt_avg_tokens": metrics["memory_efficiency"].get("prompt_avg_tokens", 0),
-            "prompt_growth_ratio": metrics["memory_efficiency"].get("prompt_growth_ratio", 0),
-            "compression_ratio": metrics["memory_efficiency"].get("prompt_compression_ratio", 0),
-            "memory_hit_rate": metrics["memory_efficiency"].get("memory_hit_rate", 0),
-            "tool_success_rate": metrics["tool_efficiency"].get("tool_success_rate", 0),
-            "useful_tool_rate": metrics["tool_efficiency"].get("useful_tool_rate", 0),
-            "plan_completion_rate": metrics["planning_quality"].get("plan_completion_pct", 0) / 100,
-            "useful_reflection_rate": metrics["reflection_value"].get("useful_reflection_rate", 0),
-            "recovery_success_rate": metrics["recovery"].get("recovery_success_rate", 0),
-            "avg_step_latency_ms": metrics["latency"].get("avg_total_latency_ms", 0),
-            "detail": {
-                "memory_efficiency": metrics["memory_efficiency"],
-                "retrieval_quality": metrics["retrieval_quality"],
-                "planning_quality": metrics["planning_quality"],
-                "reflection_value": metrics["reflection_value"],
-                "tool_efficiency": metrics["tool_efficiency"],
-                "context_efficiency": metrics["context_efficiency"],
-                "latency": metrics["latency"],
-                "recovery": metrics["recovery"],
-                "learning_reuse": metrics["learning_reuse"],
+        self.store.save_metrics(
+            self.current_run_id,
+            {
+                "tts": metrics["tts"],
+                "haes": haes_result["haes"],
+                "memory_efficiency": metrics["memory_efficiency"]["raw_score"],
+                "retrieval_quality": metrics["retrieval_quality"]["raw_score"],
+                "planning_quality": metrics["planning_quality"]["raw_score"],
+                "reflection_value": metrics["reflection_value"]["raw_score"],
+                "tool_efficiency": metrics["tool_efficiency"]["raw_score"],
+                "context_efficiency": metrics["context_efficiency"]["raw_score"],
+                "latency": metrics["latency"]["raw_score"],
+                "recovery": metrics["recovery"]["raw_score"],
+                "learning_reuse": metrics["learning_reuse"]["raw_score"],
+                "total_steps": metrics["total_steps"],
+                "total_tool_calls": metrics["total_tool_calls"],
+                "prompt_avg_tokens": metrics["memory_efficiency"].get("prompt_avg_tokens", 0),
+                "prompt_growth_ratio": metrics["memory_efficiency"].get("prompt_growth_ratio", 0),
+                "compression_ratio": metrics["memory_efficiency"].get(
+                    "prompt_compression_ratio", 0
+                ),
+                "memory_hit_rate": metrics["memory_efficiency"].get("memory_hit_rate", 0),
+                "tool_success_rate": metrics["tool_efficiency"].get("tool_success_rate", 0),
+                "useful_tool_rate": metrics["tool_efficiency"].get("useful_tool_rate", 0),
+                "plan_completion_rate": metrics["planning_quality"].get("plan_completion_pct", 0)
+                / 100,
+                "useful_reflection_rate": metrics["reflection_value"].get(
+                    "useful_reflection_rate", 0
+                ),
+                "recovery_success_rate": metrics["recovery"].get("recovery_success_rate", 0),
+                "avg_step_latency_ms": metrics["latency"].get("avg_total_latency_ms", 0),
+                "detail": {
+                    "memory_efficiency": metrics["memory_efficiency"],
+                    "retrieval_quality": metrics["retrieval_quality"],
+                    "planning_quality": metrics["planning_quality"],
+                    "reflection_value": metrics["reflection_value"],
+                    "tool_efficiency": metrics["tool_efficiency"],
+                    "context_efficiency": metrics["context_efficiency"],
+                    "latency": metrics["latency"],
+                    "recovery": metrics["recovery"],
+                    "learning_reuse": metrics["learning_reuse"],
+                },
             },
-        })
+        )
 
         result = {
             "run_id": self.current_run_id,
@@ -197,12 +214,26 @@ class EvaluationFramework:
             "tts": metrics.get("tts_seconds", 0),
             "total_steps": metrics.get("total_steps", 0),
             "total_tool_calls": metrics.get("total_tool_calls", 0),
-            "memory_efficiency": json.loads(metrics.get("data_json", "{}")).get("memory_efficiency", {}) if metrics.get("data_json") else {},
-            "retrieval_quality": json.loads(metrics.get("data_json", "{}")).get("retrieval_quality", {}),
-            "planning_quality": json.loads(metrics.get("data_json", "{}")).get("planning_quality", {}),
-            "reflection_value": json.loads(metrics.get("data_json", "{}")).get("reflection_value", {}),
-            "tool_efficiency": json.loads(metrics.get("data_json", "{}")).get("tool_efficiency", {}),
-            "context_efficiency": json.loads(metrics.get("data_json", "{}")).get("context_efficiency", {}),
+            "memory_efficiency": (
+                json.loads(metrics.get("data_json", "{}")).get("memory_efficiency", {})
+                if metrics.get("data_json")
+                else {}
+            ),
+            "retrieval_quality": json.loads(metrics.get("data_json", "{}")).get(
+                "retrieval_quality", {}
+            ),
+            "planning_quality": json.loads(metrics.get("data_json", "{}")).get(
+                "planning_quality", {}
+            ),
+            "reflection_value": json.loads(metrics.get("data_json", "{}")).get(
+                "reflection_value", {}
+            ),
+            "tool_efficiency": json.loads(metrics.get("data_json", "{}")).get(
+                "tool_efficiency", {}
+            ),
+            "context_efficiency": json.loads(metrics.get("data_json", "{}")).get(
+                "context_efficiency", {}
+            ),
             "latency": json.loads(metrics.get("data_json", "{}")).get("latency", {}),
             "recovery": json.loads(metrics.get("data_json", "{}")).get("recovery", {}),
             "learning_reuse": json.loads(metrics.get("data_json", "{}")).get("learning_reuse", {}),
@@ -228,13 +259,12 @@ class EvaluationFramework:
         report_a = self.generate_report(run_a)
         report_b = self.generate_report(run_b)
 
-        comparison = self.haes_calculator.compare(
-            report_a["haes"], report_b["haes"]
-        )
+        comparison = self.haes_calculator.compare(report_a["haes"], report_b["haes"])
 
         # Save comparison
         self.store.save_comparison(
-            run_a, run_b,
+            run_a,
+            run_b,
             comparison["haes_delta"],
             comparison["tts_delta"],
             comparison,
@@ -242,8 +272,9 @@ class EvaluationFramework:
 
         return comparison
 
-    def save_benchmark(self, name: str = "", description: str = "",
-                       task_type: str = "", run_id: str = None) -> str:
+    def save_benchmark(
+        self, name: str = "", description: str = "", task_type: str = "", run_id: str = None
+    ) -> str:
         """Save current run metrics as a benchmark baseline."""
         rid = run_id or self.current_run_id
         if not rid:
@@ -376,31 +407,55 @@ class EvaluationFramework:
             if not runs:
                 print("No runs found.")
                 return
-            print(f"{'Run ID':<14s} {'Task':<24s} {'Status':<12s} {'HAES':>6s} {'TTS':>8s} {'Steps':>6s}")
+            print(
+                f"{'Run ID':<14s} {'Task':<24s} {'Status':<12s} {'HAES':>6s} {'TTS':>8s} {'Steps':>6s}"
+            )
             print("-" * 74)
             for r in runs:
                 m = ef.store.get_metrics(r["run_id"])
                 haes = f"{m['haes_score']:.0f}" if m and m.get("haes_score") else "N/A"
                 tts = f"{m['tts_seconds']:.1f}s" if m and m.get("tts_seconds") else "N/A"
                 steps = m["total_steps"] if m else r.get("total_steps", "?")
-                print(f"{r['run_id']:<14s} {(r['task_name'] or '')[:24]:<24s} {r['status']:<12s} {haes:>6s} {tts:>8s} {str(steps):>6s}")
+                print(
+                    f"{r['run_id']:<14s} {(r['task_name'] or '')[:24]:<24s} {r['status']:<12s} {haes:>6s} {tts:>8s} {str(steps):>6s}"
+                )
 
         elif cmd == "doctor":
             print("🩺 EVALUATION FRAMEWORK DOCTOR")
             stats = ef.store.get_stats()
             checks = [
-                ("EvalStore", True, f"OK — {stats['total_runs']} runs, {stats['total_steps']} steps"),
-                ("SQLite writable", stats["total_runs"] >= 0, "OK" if stats["total_runs"] >= 0 else "FAIL"),
+                (
+                    "EvalStore",
+                    True,
+                    f"OK — {stats['total_runs']} runs, {stats['total_steps']} steps",
+                ),
+                (
+                    "SQLite writable",
+                    stats["total_runs"] >= 0,
+                    "OK" if stats["total_runs"] >= 0 else "FAIL",
+                ),
                 ("Run export works", True, "OK" if stats["total_runs"] >= 0 else "No runs to test"),
-                ("Benchmarks", stats["benchmarks_saved"] >= 0, f"{stats['benchmarks_saved']} saved"),
+                (
+                    "Benchmarks",
+                    stats["benchmarks_saved"] >= 0,
+                    f"{stats['benchmarks_saved']} saved",
+                ),
                 ("Metrics engine", True, "OK — loaded"),
                 ("HAES calculator", True, "OK — loaded"),
-                ("Store size", stats["store_size_bytes"] > 0, f"{stats['store_size_bytes'] / 1024:.1f} KB"),
+                (
+                    "Store size",
+                    stats["store_size_bytes"] > 0,
+                    f"{stats['store_size_bytes'] / 1024:.1f} KB",
+                ),
             ]
             passed = sum(1 for name, ok, _ in checks if ok)
             for name, ok, detail in checks:
                 print(f"  {'✅' if ok else '❌'} {name}: {detail}")
-            print(f"🏁 DOCTOR: {passed}/{len(checks)} OK" if passed == len(checks) else f"⚠️  {passed}/{len(checks)} OK")
+            print(
+                f"🏁 DOCTOR: {passed}/{len(checks)} OK"
+                if passed == len(checks)
+                else f"⚠️  {passed}/{len(checks)} OK"
+            )
 
         else:
             print(f"Unknown command: {cmd}")

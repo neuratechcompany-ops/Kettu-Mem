@@ -10,6 +10,7 @@ Tests all 6 layers:
   5. Compression Engine (v2: auto-trigger, incremental)
   6. Mem0 Store (ADD-only extraction, preferences, decisions, entities)
 """
+
 import os
 import shutil
 import sys
@@ -70,11 +71,14 @@ def generate_test_events(n: int = 120) -> list[dict]:
                 msg = decision_msgs.pop(0)
                 events.append({"role": "assistant", "type": "message", "content": msg})
             else:
-                events.append({
-                    "role": "user", "type": "message",
-                    "content": f"Давай обсудим задачу: {topic}. "
-                               f"Мне нужно понять, какие метрики важны и как подойти к реализации."
-                })
+                events.append(
+                    {
+                        "role": "user",
+                        "type": "message",
+                        "content": f"Давай обсудим задачу: {topic}. "
+                        f"Мне нужно понять, какие метрики важны и как подойти к реализации.",
+                    }
+                )
         elif i % 3 == 1:
             plans = [
                 "Проанализирую задачу. Основные метрики: конверсия, CTR, CAC, LTV. "
@@ -83,26 +87,34 @@ def generate_test_events(n: int = 120) -> list[dict]:
                 "Хорошо, смотрю на данные. Вижу несколько точек роста.",
                 "Ок, давай системно. Сначала бенчмарки, потом сравнение.",
             ]
-            events.append({
-                "role": "assistant", "type": "message",
-                "content": plans[i % len(plans)]
-            })
+            events.append(
+                {"role": "assistant", "type": "message", "content": plans[i % len(plans)]}
+            )
             if i % 5 == 0:
-                events.append({
-                    "role": "assistant", "type": "tool_call",
-                    "content": f"web_search('{topic} best practices 2026')"
-                })
+                events.append(
+                    {
+                        "role": "assistant",
+                        "type": "tool_call",
+                        "content": f"web_search('{topic} best practices 2026')",
+                    }
+                )
         else:
             if i % 11 == 0:
-                events.append({
-                    "role": "tool", "type": "error",
-                    "content": f"Ошибка API: rate limit exceeded при запросе '{topic}'"
-                })
+                events.append(
+                    {
+                        "role": "tool",
+                        "type": "error",
+                        "content": f"Ошибка API: rate limit exceeded при запросе '{topic}'",
+                    }
+                )
             else:
-                events.append({
-                    "role": "tool", "type": "tool_output",
-                    "content": f"Результаты поиска по '{topic}': найдено 42 источника."
-                })
+                events.append(
+                    {
+                        "role": "tool",
+                        "type": "tool_output",
+                        "content": f"Результаты поиска по '{topic}': найдено 42 источника.",
+                    }
+                )
 
     return events
 
@@ -111,14 +123,15 @@ def generate_test_events(n: int = 120) -> list[dict]:
 # TEST 1: L3 Verbatim Archive
 # ═══════════════════════════════════════════════════════════
 def test_l3():
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("TEST 1: L3 Verbatim Archive")
-    print("="*60)
+    print("=" * 60)
     l3 = L3VerbatimArchive("/tmp/spike-mm-v2/l3")
     sid = "t1"
     l3.record_event(sid, 0, role="user", type="message", content="Привет")
-    l3.record_event(sid, 1, role="assistant", type="message", content="Привет!",
-                    refs=[("task", "1")])
+    l3.record_event(
+        sid, 1, role="assistant", type="message", content="Привет!", refs=[("task", "1")]
+    )
     events = l3.read_session(sid)
     assert len(events) == 2
     assert events[1]["refs"][0] == ["task", "1"]
@@ -130,9 +143,9 @@ def test_l3():
 # TEST 2: SQLite
 # ═══════════════════════════════════════════════════════════
 def test_sqlite():
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("TEST 2: SQLite Metadata Index")
-    print("="*60)
+    print("=" * 60)
     sql = SQLiteMetadataIndex("/tmp/spike-mm-v2/meta.db")
     sql.index_event("e1", "s1", 0, role="user", type="message", content="Hello")
     sql.index_event("e2", "s1", 1, role="assistant", type="tool_call", content="search()")
@@ -148,9 +161,9 @@ def test_sqlite():
 # TEST 3: FAISS
 # ═══════════════════════════════════════════════════════════
 def test_faiss():
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("TEST 3: FAISS Semantic Index")
-    print("="*60)
+    print("=" * 60)
     idx = FAISSSemanticIndex("/tmp/spike-mm-v2/faiss")
     texts = [f"test text number {i} about topic {i%5}" for i in range(20)]
     ids = list(range(20))
@@ -165,9 +178,9 @@ def test_faiss():
 # TEST 4: Context Builder v2 (strategies, Mem0, weighted)
 # ═══════════════════════════════════════════════════════════
 def test_context_builder():
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("TEST 4: Context Builder v2")
-    print("="*60)
+    print("=" * 60)
 
     # Test strategies
     for strategy in [BudgetStrategy.TIGHT, BudgetStrategy.NORMAL, BudgetStrategy.GENEROUS]:
@@ -175,45 +188,80 @@ def test_context_builder():
         builder = ContextBuilder(cfg)
         builder.set_system("You are a helpful assistant.")
 
-        events = [{"step_id": i, "role": "user" if i%2==0 else "assistant",
-                    "type": "message", "content": f"Event {i}: marketing discussion"} for i in range(40)]
+        events = [
+            {
+                "step_id": i,
+                "role": "user" if i % 2 == 0 else "assistant",
+                "type": "message",
+                "content": f"Event {i}: marketing discussion",
+            }
+            for i in range(40)
+        ]
         builder.set_recent_events(events)
 
-        builder.set_semantic_results([
-            {"faiss_id": 0, "score": 0.9, "chunk_text": "relevant memory about marketing"}
-        ])
+        builder.set_semantic_results(
+            [{"faiss_id": 0, "score": 0.9, "chunk_text": "relevant memory about marketing"}]
+        )
 
         # Mem0 facts
-        builder.set_mem0_facts([
-            {"type": "preference", "content": "Предпочитает Notion для документации", "confidence": 0.9,
-             "entities": ["Notion"]},
-            {"type": "decision", "content": "Бюджет на рекламу 100 000₽/мес", "confidence": 0.95,
-             "entities": ["Яндекс.Директ"]},
-            {"type": "fact", "content": "Команда из 5 маркетологов", "confidence": 0.8,
-             "entities": []},
-        ])
+        builder.set_mem0_facts(
+            [
+                {
+                    "type": "preference",
+                    "content": "Предпочитает Notion для документации",
+                    "confidence": 0.9,
+                    "entities": ["Notion"],
+                },
+                {
+                    "type": "decision",
+                    "content": "Бюджет на рекламу 100 000₽/мес",
+                    "confidence": 0.95,
+                    "entities": ["Яндекс.Директ"],
+                },
+                {
+                    "type": "fact",
+                    "content": "Команда из 5 маркетологов",
+                    "confidence": 0.8,
+                    "entities": [],
+                },
+            ]
+        )
 
-        builder.set_summaries([
-            {"type": "stage", "start_step": 0, "end_step": 20, "content": "Initial research phase."}
-        ])
+        builder.set_summaries(
+            [
+                {
+                    "type": "stage",
+                    "start_step": 0,
+                    "end_step": 20,
+                    "content": "Initial research phase.",
+                }
+            ]
+        )
 
-        builder.set_tools([
-            ToolSchema(name="search", description="Search the web"),
-            ToolSchema(name="analyze", description="Analyze data", parameters={"format": "json"}),
-        ])
+        builder.set_tools(
+            [
+                ToolSchema(name="search", description="Search the web"),
+                ToolSchema(
+                    name="analyze", description="Analyze data", parameters={"format": "json"}
+                ),
+            ]
+        )
 
         prompt, stats = builder.build()
 
         print(f"\n  Strategy: {strategy.value}")
-        print(f"  Budget: {stats['total_budget']:,}t → used {stats['used_tokens']:,}t ({stats['utilization_pct']}%)")
+        print(
+            f"  Budget: {stats['total_budget']:,}t → used {stats['used_tokens']:,}t ({stats['utilization_pct']}%)"
+        )
         print(f"  Slices: {', '.join(s['name'] for s in stats['slices'])}")
 
         # Assertions
         assert "## Recent Session Events" in prompt
         assert "## Long-term Memory" in prompt, "Mem0 section missing!"
         assert "## Available Tools" in prompt
-        assert stats["used_tokens"] < stats["working_budget"], \
-            f"Over budget: {stats['used_tokens']} > {stats['working_budget']}"
+        assert (
+            stats["used_tokens"] < stats["working_budget"]
+        ), f"Over budget: {stats['used_tokens']} > {stats['working_budget']}"
         assert "Preferences" in prompt or "Decisions" in prompt, "Mem0 facts not rendered"
         assert "raw archive" not in prompt.lower()
 
@@ -224,9 +272,9 @@ def test_context_builder():
 # TEST 5: Compression Engine v2
 # ═══════════════════════════════════════════════════════════
 def test_compression():
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("TEST 5: Compression Engine v2")
-    print("="*60)
+    print("=" * 60)
 
     l3 = L3VerbatimArchive("/tmp/spike-mm-v2/comp/l3")
     sql = SQLiteMetadataIndex("/tmp/spike-mm-v2/comp/meta.db")
@@ -234,7 +282,11 @@ def test_compression():
 
     events = [
         ("user", "message", "Нужно выбрать CRM. Я предпочитаю AmoCRM, потому что там удобное API."),
-        ("assistant", "message", "Проанализировал AmoCRM vs Bitrix24. AmoCRM лучше по интеграциям."),
+        (
+            "assistant",
+            "message",
+            "Проанализировал AmoCRM vs Bitrix24. AmoCRM лучше по интеграциям.",
+        ),
         ("assistant", "message", "Решил: AmoCRM, бюджет 15000₽/мес, внедрение за 2 недели."),
         ("user", "message", "Согласовано. Осталось настроить вебхуки — pending задача."),
         ("assistant", "tool_call", "web_search('Amocrm OAuth 2.0 docs')"),
@@ -283,31 +335,52 @@ def test_compression():
 # TEST 6: Mem0 Store (ADD-only extraction)
 # ═══════════════════════════════════════════════════════════
 def test_mem0():
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("TEST 6: Mem0 Long-term Memory")
-    print("="*60)
+    print("=" * 60)
 
     mem0 = Mem0Store("/tmp/spike-mm-v2/mem0.db")
 
     # Add facts of different types
-    mem0.add_fact(FactType.PREFERENCE, "Предпочитает Notion для документации",
-                  confidence=0.9, entities=["Notion"], source_session="s1")
-    mem0.add_fact(FactType.PREFERENCE, "Любит визуальные дашборды, не таблицы",
-                  confidence=0.85, entities=["дашборды"], source_session="s1")
+    mem0.add_fact(
+        FactType.PREFERENCE,
+        "Предпочитает Notion для документации",
+        confidence=0.9,
+        entities=["Notion"],
+        source_session="s1",
+    )
+    mem0.add_fact(
+        FactType.PREFERENCE,
+        "Любит визуальные дашборды, не таблицы",
+        confidence=0.85,
+        entities=["дашборды"],
+        source_session="s1",
+    )
 
     # Duplicate — should increase confidence
-    mem0.add_fact(FactType.PREFERENCE, "Предпочитает Notion для документации",
-                  confidence=0.5, entities=["Notion"], source_session="s2")
+    mem0.add_fact(
+        FactType.PREFERENCE,
+        "Предпочитает Notion для документации",
+        confidence=0.5,
+        entities=["Notion"],
+        source_session="s2",
+    )
 
-    mem0.add_fact(FactType.DECISION, "Бюджет на контекстную рекламу: 100 000₽/мес",
-                  confidence=0.95, entities=["Яндекс.Директ"], source_session="s1")
-    mem0.add_fact(FactType.DECISION, "Запуск перенесён на сентябрь",
-                  confidence=0.9, source_session="s1")
+    mem0.add_fact(
+        FactType.DECISION,
+        "Бюджет на контекстную рекламу: 100 000₽/мес",
+        confidence=0.95,
+        entities=["Яндекс.Директ"],
+        source_session="s1",
+    )
+    mem0.add_fact(
+        FactType.DECISION, "Запуск перенесён на сентябрь", confidence=0.9, source_session="s1"
+    )
 
-    mem0.add_fact(FactType.FACT, "Команда: 5 маркетологов, 2 дизайнера",
-                  confidence=0.8, source_session="s1")
-    mem0.add_fact(FactType.ENTITY, "Entity: AmoCRM",
-                  entities=["AmoCRM"], source_session="s1")
+    mem0.add_fact(
+        FactType.FACT, "Команда: 5 маркетологов, 2 дизайнера", confidence=0.8, source_session="s1"
+    )
+    mem0.add_fact(FactType.ENTITY, "Entity: AmoCRM", entities=["AmoCRM"], source_session="s1")
 
     # Query
     prefs = mem0.get_by_type(FactType.PREFERENCE)
@@ -342,12 +415,27 @@ def test_mem0():
 
     # Extract from events
     test_events = [
-        {"event_id": "e1", "step_id": 0, "role": "user", "type": "message",
-         "content": "Я люблю работать в Figma, это лучший инструмент для дизайна."},
-        {"event_id": "e2", "step_id": 1, "role": "user", "type": "message",
-         "content": "Мне важно, чтобы отчёты были в Google Data Studio."},
-        {"event_id": "e3", "step_id": 2, "role": "assistant", "type": "message",
-         "content": "Понял. Решил: будем использовать Figma для всех макетов, Google Data Studio для отчётов."},
+        {
+            "event_id": "e1",
+            "step_id": 0,
+            "role": "user",
+            "type": "message",
+            "content": "Я люблю работать в Figma, это лучший инструмент для дизайна.",
+        },
+        {
+            "event_id": "e2",
+            "step_id": 1,
+            "role": "user",
+            "type": "message",
+            "content": "Мне важно, чтобы отчёты были в Google Data Studio.",
+        },
+        {
+            "event_id": "e3",
+            "step_id": 2,
+            "role": "assistant",
+            "type": "message",
+            "content": "Понял. Решил: будем использовать Figma для всех макетов, Google Data Studio для отчётов.",
+        },
     ]
     extracted = mem0.extract_facts(test_events, "s2")
     print(f"  ✅ Extracted from events: {len(extracted)} facts")
@@ -363,9 +451,9 @@ def test_mem0():
 # TEST 7: FULL VERTICAL SLICE with Mem0
 # ═══════════════════════════════════════════════════════════
 def test_full_pipeline():
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("TEST 7: FULL VERTICAL SLICE (130 events + Mem0)")
-    print("="*60)
+    print("=" * 60)
 
     shutil.rmtree("/tmp/spike-mm-v2/full", ignore_errors=True)
 
@@ -401,12 +489,10 @@ def test_full_pipeline():
 
     for query, strategy in queries:
         prompt, ctx_stats = mm.build_context(
-            query=query, strategy=strategy,
-            system_prompt="You are a marketing AI with memory."
+            query=query, strategy=strategy, system_prompt="You are a marketing AI with memory."
         )
 
-        assert ctx_stats["used_tokens"] < ctx_stats["working_budget"], \
-            f"Over budget for {query}"
+        assert ctx_stats["used_tokens"] < ctx_stats["working_budget"], f"Over budget for {query}"
         assert "## Recent Session Events" in prompt
         assert len(prompt) > 500
 
@@ -414,9 +500,13 @@ def test_full_pipeline():
         has_semantic = "## Relevant Memories" in prompt
 
         print(f"\n  Query: '{query}' ({strategy.value})")
-        print(f"  Budget: {ctx_stats['used_tokens']:,}/{ctx_stats['working_budget']:,}t "
-              f"({ctx_stats['utilization_pct']}%)")
-        print(f"  Mem0 facts: {'✅' if has_mem0 else '—'} | Semantic: {'✅' if has_semantic else '—'}")
+        print(
+            f"  Budget: {ctx_stats['used_tokens']:,}/{ctx_stats['working_budget']:,}t "
+            f"({ctx_stats['utilization_pct']}%)"
+        )
+        print(
+            f"  Mem0 facts: {'✅' if has_mem0 else '—'} | Semantic: {'✅' if has_semantic else '—'}"
+        )
 
     # Verify L3 preservation
     all_events = mm.l3.read_session(session_id)
@@ -428,15 +518,19 @@ def test_full_pipeline():
     assert mem0_stats["total_facts"] > 0, "Mem0 has no facts!"
     pref_count = mem0_stats["by_type"].get("preference", 0)
     dec_count = mem0_stats["by_type"].get("decision", 0)
-    print(f"  ✅ Mem0: {mem0_stats['total_facts']} facts "
-          f"({pref_count} preferences, {dec_count} decisions, "
-          f"{mem0_stats['total_entities']} entities)")
+    print(
+        f"  ✅ Mem0: {mem0_stats['total_facts']} facts "
+        f"({pref_count} preferences, {dec_count} decisions, "
+        f"{mem0_stats['total_entities']} entities)"
+    )
 
     # Compression
     result = mm.compress(end_step=100)
-    print(f"  ✅ Compression: {result['events_compressed']} events → "
-          f"{result.get('decisions', 0)} decisions, "
-          f"{len(result.get('entities', []))} entities")
+    print(
+        f"  ✅ Compression: {result['events_compressed']} events → "
+        f"{result.get('decisions', 0)} decisions, "
+        f"{len(result.get('entities', []))} entities"
+    )
 
     mm.close()
 

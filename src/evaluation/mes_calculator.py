@@ -16,6 +16,7 @@ Components (weighted):
 
 MES = Σ (raw_component_score / max_component_score × weight × 100)
 """
+
 from collections import OrderedDict
 from dataclasses import dataclass
 
@@ -31,44 +32,85 @@ class MESComponent:
 class MESCalculator:
     """Memory Efficiency Score calculator."""
 
-    COMPONENTS = OrderedDict([
-        ("compression", MESComponent(
-            "Compression", 0.20, 20,
-            "Raw history vs prompt ratio, summary quality, absence of degradation"
-        )),
-        ("prompt_stability", MESComponent(
-            "Prompt Stability", 0.15, 15,
-            "Prompt size curve across 10/50/100/300/500/1000 steps"
-        )),
-        ("retrieval", MESComponent(
-            "Retrieval", 0.15, 15,
-            "Recall@1/3/5/10, Precision@1/5, false/missed/irrelevant"
-        )),
-        ("mem0", MESComponent(
-            "Mem0 Quality", 0.10, 10,
-            "Hit rate, duplicates, contradictions, stale/low-confidence facts"
-        )),
-        ("archive", MESComponent(
-            "Archive Integrity", 0.10, 10,
-            "Append-only, JSONL valid, refs correct, search speed"
-        )),
-        ("context_builder", MESComponent(
-            "Context Builder", 0.10, 10,
-            "Build latency, utilisation, contributions, no leakage"
-        )),
-        ("semantic_index", MESComponent(
-            "Semantic Index", 0.05, 10,
-            "FAISS consistency, orphans, missing vectors, search speed"
-        )),
-        ("recovery", MESComponent(
-            "Recovery", 0.10, 10,
-            "Post-restart: L3, SQLite, FAISS, Mem0, refs, summaries"
-        )),
-        ("pollution", MESComponent(
-            "Memory Pollution", 0.05, 10,
-            "Duplicate entities/facts, obsolete, unused, temporary — lower is better"
-        )),
-    ])
+    COMPONENTS = OrderedDict(
+        [
+            (
+                "compression",
+                MESComponent(
+                    "Compression",
+                    0.20,
+                    20,
+                    "Raw history vs prompt ratio, summary quality, absence of degradation",
+                ),
+            ),
+            (
+                "prompt_stability",
+                MESComponent(
+                    "Prompt Stability",
+                    0.15,
+                    15,
+                    "Prompt size curve across 10/50/100/300/500/1000 steps",
+                ),
+            ),
+            (
+                "retrieval",
+                MESComponent(
+                    "Retrieval", 0.15, 15, "Recall@1/3/5/10, Precision@1/5, false/missed/irrelevant"
+                ),
+            ),
+            (
+                "mem0",
+                MESComponent(
+                    "Mem0 Quality",
+                    0.10,
+                    10,
+                    "Hit rate, duplicates, contradictions, stale/low-confidence facts",
+                ),
+            ),
+            (
+                "archive",
+                MESComponent(
+                    "Archive Integrity",
+                    0.10,
+                    10,
+                    "Append-only, JSONL valid, refs correct, search speed",
+                ),
+            ),
+            (
+                "context_builder",
+                MESComponent(
+                    "Context Builder",
+                    0.10,
+                    10,
+                    "Build latency, utilisation, contributions, no leakage",
+                ),
+            ),
+            (
+                "semantic_index",
+                MESComponent(
+                    "Semantic Index",
+                    0.05,
+                    10,
+                    "FAISS consistency, orphans, missing vectors, search speed",
+                ),
+            ),
+            (
+                "recovery",
+                MESComponent(
+                    "Recovery", 0.10, 10, "Post-restart: L3, SQLite, FAISS, Mem0, refs, summaries"
+                ),
+            ),
+            (
+                "pollution",
+                MESComponent(
+                    "Memory Pollution",
+                    0.05,
+                    10,
+                    "Duplicate entities/facts, obsolete, unused, temporary — lower is better",
+                ),
+            ),
+        ]
+    )
 
     def calculate(self, metrics: dict) -> dict:
         total = 0.0
@@ -80,15 +122,18 @@ class MESCalculator:
             normalized = (raw / comp.max_score) * comp.weight * 100
             total += normalized
 
-            breakdown.append({
-                "component": comp.name,
-                "raw_score": raw,
-                "max_raw": comp.max_score,
-                "weight": round(comp.weight, 2),
-                "contribution": round(normalized, 1),
-                "details": {k: v for k, v in group.items()
-                           if k not in ("raw_score", "max_score")},
-            })
+            breakdown.append(
+                {
+                    "component": comp.name,
+                    "raw_score": raw,
+                    "max_raw": comp.max_score,
+                    "weight": round(comp.weight, 2),
+                    "contribution": round(normalized, 1),
+                    "details": {
+                        k: v for k, v in group.items() if k not in ("raw_score", "max_score")
+                    },
+                }
+            )
 
         mes = round(total, 1)
         return {
@@ -134,12 +179,18 @@ class MESCalculator:
 
     @staticmethod
     def _grade(mes: float) -> str:
-        if mes >= 90: return "🏆 Exceptional"
-        elif mes >= 75: return "✨ Excellent"
-        elif mes >= 60: return "✅ Good"
-        elif mes >= 40: return "⚠️ Fair"
-        elif mes >= 20: return "🔴 Poor"
-        else: return "💀 Critical"
+        if mes >= 90:
+            return "🏆 Exceptional"
+        elif mes >= 75:
+            return "✨ Excellent"
+        elif mes >= 60:
+            return "✅ Good"
+        elif mes >= 40:
+            return "⚠️ Fair"
+        elif mes >= 20:
+            return "🔴 Poor"
+        else:
+            return "💀 Critical"
 
     @staticmethod
     def _interpretation(mes: float, breakdown: list) -> str:

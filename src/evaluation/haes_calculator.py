@@ -26,6 +26,7 @@ Interpretation:
   20-39:  Poor — major issues
   0-19:   Critical — agent barely functional
 """
+
 from collections import OrderedDict
 from dataclasses import dataclass
 
@@ -33,8 +34,8 @@ from dataclasses import dataclass
 @dataclass(frozen=True)
 class HAESComponent:
     name: str
-    weight: float        # 0.0 to 1.0
-    max_score: float     # max raw score for this component
+    weight: float  # 0.0 to 1.0
+    max_score: float  # max raw score for this component
     description: str
 
 
@@ -49,44 +50,83 @@ class HAESCalculator:
         print(result['breakdown'])
     """
 
-    COMPONENTS = OrderedDict([
-        ("memory_efficiency", HAESComponent(
-            "Memory Efficiency", 0.20, 20,
-            "Prompt compression, memory hit rate, archive growth, pollution"
-        )),
-        ("retrieval_quality", HAESComponent(
-            "Retrieval Quality", 0.15, 15,
-            "Recall@5, Precision@5, false retrieval, lookup success"
-        )),
-        ("planning_quality", HAESComponent(
-            "Planning Quality", 0.15, 15,
-            "Goal/plan completion, revisions, deviation, blockers"
-        )),
-        ("reflection_value", HAESComponent(
-            "Reflection Value", 0.10, 10,
-            "Useful reflections, stuck/loop detection, strategy changes"
-        )),
-        ("tool_efficiency", HAESComponent(
-            "Tool Efficiency", 0.10, 10,
-            "Tool success rate, useful vs duplicate tools, latency"
-        )),
-        ("context_efficiency", HAESComponent(
-            "Context Efficiency", 0.10, 10,
-            "Budget utilisation, prompt growth, output reserve"
-        )),
-        ("latency", HAESComponent(
-            "Latency", 0.10, 10,
-            "Step latency (avg, p50, p99), component breakdown"
-        )),
-        ("recovery", HAESComponent(
-            "Recovery", 0.10, 10,
-            "Recovery success rate, graceful degradation"
-        )),
-        ("learning_reuse", HAESComponent(
-            "Learning / Reuse", 0.10, 10,
-            "Steps/TTS reduction vs previous runs, playbook reuse"
-        )),
-    ])
+    COMPONENTS = OrderedDict(
+        [
+            (
+                "memory_efficiency",
+                HAESComponent(
+                    "Memory Efficiency",
+                    0.20,
+                    20,
+                    "Prompt compression, memory hit rate, archive growth, pollution",
+                ),
+            ),
+            (
+                "retrieval_quality",
+                HAESComponent(
+                    "Retrieval Quality",
+                    0.15,
+                    15,
+                    "Recall@5, Precision@5, false retrieval, lookup success",
+                ),
+            ),
+            (
+                "planning_quality",
+                HAESComponent(
+                    "Planning Quality",
+                    0.15,
+                    15,
+                    "Goal/plan completion, revisions, deviation, blockers",
+                ),
+            ),
+            (
+                "reflection_value",
+                HAESComponent(
+                    "Reflection Value",
+                    0.10,
+                    10,
+                    "Useful reflections, stuck/loop detection, strategy changes",
+                ),
+            ),
+            (
+                "tool_efficiency",
+                HAESComponent(
+                    "Tool Efficiency",
+                    0.10,
+                    10,
+                    "Tool success rate, useful vs duplicate tools, latency",
+                ),
+            ),
+            (
+                "context_efficiency",
+                HAESComponent(
+                    "Context Efficiency",
+                    0.10,
+                    10,
+                    "Budget utilisation, prompt growth, output reserve",
+                ),
+            ),
+            (
+                "latency",
+                HAESComponent(
+                    "Latency", 0.10, 10, "Step latency (avg, p50, p99), component breakdown"
+                ),
+            ),
+            (
+                "recovery",
+                HAESComponent("Recovery", 0.10, 10, "Recovery success rate, graceful degradation"),
+            ),
+            (
+                "learning_reuse",
+                HAESComponent(
+                    "Learning / Reuse",
+                    0.10,
+                    10,
+                    "Steps/TTS reduction vs previous runs, playbook reuse",
+                ),
+            ),
+        ]
+    )
 
     def calculate(self, metrics: dict) -> dict:
         """
@@ -120,15 +160,18 @@ class HAESCalculator:
                 normalized = 0
 
             total += normalized
-            breakdown.append({
-                "component": comp.name,
-                "raw_score": raw,
-                "max_raw": max_raw,
-                "weight": round(comp.weight, 2),
-                "contribution": round(normalized, 1),
-                "details": {k: v for k, v in group.items()
-                           if k not in ("raw_score", "max_score")},
-            })
+            breakdown.append(
+                {
+                    "component": comp.name,
+                    "raw_score": raw,
+                    "max_raw": max_raw,
+                    "weight": round(comp.weight, 2),
+                    "contribution": round(normalized, 1),
+                    "details": {
+                        k: v for k, v in group.items() if k not in ("raw_score", "max_score")
+                    },
+                }
+            )
 
         haes = round(total, 1)
         grade = self._grade(haes)
@@ -153,13 +196,15 @@ class HAESCalculator:
         deltas = []
 
         for ba, bb in zip(haes_a["breakdown"], haes_b["breakdown"]):
-            deltas.append({
-                "component": ba["component"],
-                "before": ba["contribution"],
-                "after": bb["contribution"],
-                "delta": round(bb["contribution"] - ba["contribution"], 1),
-                "improved": bb["contribution"] > ba["contribution"],
-            })
+            deltas.append(
+                {
+                    "component": ba["component"],
+                    "before": ba["contribution"],
+                    "after": bb["contribution"],
+                    "delta": round(bb["contribution"] - ba["contribution"], 1),
+                    "improved": bb["contribution"] > ba["contribution"],
+                }
+            )
 
         return {
             "haes_before": haes_a["haes"],
@@ -217,8 +262,12 @@ class HAESCalculator:
     def format_report(haes_result: dict, detailed: bool = False) -> str:
         """Format HAES result as a readable report string."""
         grade_icon = {
-            "🏆 Exceptional": "🏆", "✨ Excellent": "✨", "✅ Good": "✅",
-            "⚠️ Fair": "⚠️", "🔴 Poor": "🔴", "💀 Critical": "💀",
+            "🏆 Exceptional": "🏆",
+            "✨ Excellent": "✨",
+            "✅ Good": "✅",
+            "⚠️ Fair": "⚠️",
+            "🔴 Poor": "🔴",
+            "💀 Critical": "💀",
         }
 
         icon = grade_icon.get(haes_result["grade"], "❓")

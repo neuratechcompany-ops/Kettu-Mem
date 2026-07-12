@@ -6,6 +6,7 @@ Three test scenarios:
   Test 2 — Long Task (300+ steps)
   Test 3 — Similar Tasks (3 tasks, measure improvement)
 """
+
 import json
 import os
 import random
@@ -20,6 +21,7 @@ from evaluation.eval_framework import EvaluationFramework
 from evaluation.eval_store import EvalStore, StepMetrics
 
 # ── Simulated agent loop for testing ────────────────────
+
 
 class SimulatedAgent:
     """
@@ -38,6 +40,7 @@ class SimulatedAgent:
             try:
                 from layers.cognitive_runtime import CognitiveRuntime
                 from memory_manager import MemoryManager
+
                 self.mm = MemoryManager(str(Path.home() / ".openclaw/memory-store"))
                 self.cr = CognitiveRuntime(self.mm)
                 print("[Agent] Real MemoryManager + CognitiveRuntime loaded")
@@ -45,10 +48,14 @@ class SimulatedAgent:
                 print("[Agent] Real components not available, falling back to synthetic")
                 self.mode = "synthetic"
 
-    def run_task(self, ef: EvaluationFramework, steps: int,
-                 quality: float = 0.7,
-                 tool_noise: float = 0.1,
-                 memory_activity: bool = True):
+    def run_task(
+        self,
+        ef: EvaluationFramework,
+        steps: int,
+        quality: float = 0.7,
+        tool_noise: float = 0.1,
+        memory_activity: bool = True,
+    ):
         """
         Run a simulated task of N steps.
 
@@ -77,8 +84,10 @@ class SimulatedAgent:
             # Simulate retrieval
             faiss_latency = random.uniform(1, 10)
             tc.set_retrieval_metrics(
-                faiss_results=[{"id": j, "score": random.uniform(0.3, 0.9)}
-                              for j in range(random.randint(0, 5))],
+                faiss_results=[
+                    {"id": j, "score": random.uniform(0.3, 0.9)}
+                    for j in range(random.randint(0, 5))
+                ],
             )
 
             # --- After LLM ---
@@ -95,12 +104,17 @@ class SimulatedAgent:
             tool_outputs = []
 
             for _ in range(n_tools):
-                tool_calls.append({"name": random.choice(
-                    ["web_search", "read", "write", "exec"]
-                ), "params": {"q": f"query-{i}"}})
+                tool_calls.append(
+                    {
+                        "name": random.choice(["web_search", "read", "write", "exec"]),
+                        "params": {"q": f"query-{i}"},
+                    }
+                )
 
                 if random.random() < quality * (1 - tool_noise):
-                    tool_outputs.append({"type": "tool_output", "content": f"Result for step {i} with useful data."})
+                    tool_outputs.append(
+                        {"type": "tool_output", "content": f"Result for step {i} with useful data."}
+                    )
                 elif random.random() < tool_noise:
                     tool_outputs.append({"type": "error", "content": "Tool failed"})
                 else:
@@ -108,7 +122,9 @@ class SimulatedAgent:
 
             # Add duplicates occasionally for low-quality agents
             if random.random() < tool_noise:
-                tool_calls.append(tool_calls[-1] if tool_calls else {"name": "read", "params": {"f": f"dup-{i}"}})
+                tool_calls.append(
+                    tool_calls[-1] if tool_calls else {"name": "read", "params": {"f": f"dup-{i}"}}
+                )
                 tool_outputs.append({"type": "tool_output", "content": "Same as before"})
 
             tc.after_tools(tool_calls=tool_calls, tool_outputs=tool_outputs)
@@ -126,8 +142,10 @@ class SimulatedAgent:
 
             # --- Reflection ---
             reflection = {
-                "outcome": "progress" if random.random() < quality * 0.8 else random.choice(
-                    ["stuck", "loop", "progress"]
+                "outcome": (
+                    "progress"
+                    if random.random() < quality * 0.8
+                    else random.choice(["stuck", "loop", "progress"])
                 ),
                 "should_change_strategy": random.random() < (1 - quality) * 0.3,
                 "reasoning": "Simulated reflection",
@@ -136,13 +154,23 @@ class SimulatedAgent:
             tc.after_reflection(reflection=reflection)
 
             # --- Planning ---
-            tc.set_planning_metrics(type('PS', (), {
-                'progress_pct': lambda self: min(1.0, i / max(1, steps) * quality),
-                'plan': [type('S', (), {'status': 'completed' if j < i * quality else 'pending'})()
-                         for j in range(10)],
-                'completed_steps': [j for j in range(max(1, int(i * quality)))],
-                'revision_count': 0 if quality > 0.7 else random.randint(0, 3),
-            })())
+            tc.set_planning_metrics(
+                type(
+                    "PS",
+                    (),
+                    {
+                        "progress_pct": lambda self: min(1.0, i / max(1, steps) * quality),
+                        "plan": [
+                            type(
+                                "S", (), {"status": "completed" if j < i * quality else "pending"}
+                            )()
+                            for j in range(10)
+                        ],
+                        "completed_steps": [j for j in range(max(1, int(i * quality)))],
+                        "revision_count": 0 if quality > 0.7 else random.randint(0, 3),
+                    },
+                )()
+            )
 
             # Record step
             sm = tc.record()
@@ -150,14 +178,17 @@ class SimulatedAgent:
 
             # Log occasionally
             if i % 50 == 0:
-                print(f"  Step {i}/{steps} — "
-                      f"prompt: {sm.prompt_tokens}, tools: {sm.tool_calls_this_step}, "
-                      f"latency: {step_elapsed*1000:.1f}ms")
+                print(
+                    f"  Step {i}/{steps} — "
+                    f"prompt: {sm.prompt_tokens}, tools: {sm.tool_calls_this_step}, "
+                    f"latency: {step_elapsed*1000:.1f}ms"
+                )
 
         print(f"  ✅ {steps}/{steps} steps completed")
 
 
 # ── Test 1: Single Task ─────────────────────────────────
+
 
 def test_single_task():
     """Test 1: Single task, 25 steps. Verify TTS, HAES, prompt growth, tool efficiency."""
@@ -196,8 +227,12 @@ def test_single_task():
     checks = []
     checks.append(("TTS > 0", haes["tts"] > 0))
     checks.append(("HAES 0-100", 0 <= haes["haes"] <= 100))
-    checks.append(("Prompt tokens reported", metrics["memory_efficiency"].get("prompt_avg_tokens", 0) > 0))
-    checks.append(("Tool efficiency reported", metrics["tool_efficiency"].get("total_tool_calls", 0) > 0))
+    checks.append(
+        ("Prompt tokens reported", metrics["memory_efficiency"].get("prompt_avg_tokens", 0) > 0)
+    )
+    checks.append(
+        ("Tool efficiency reported", metrics["tool_efficiency"].get("total_tool_calls", 0) > 0)
+    )
     checks.append(("Memory metrics reported", "memory_hit_rate" in metrics["memory_efficiency"]))
     checks.append(("Has breakdown", len(haes["breakdown"]) == 9))
 
@@ -212,6 +247,7 @@ def test_single_task():
 
 
 # ── Test 2: Long Task ───────────────────────────────────
+
 
 def test_long_task():
     """Test 2: Long task, 300+ steps. Verify stability, compression, recovery."""
@@ -273,6 +309,7 @@ def test_long_task():
 
 # ── Test 3: Similar Tasks ───────────────────────────────
 
+
 def test_similar_tasks():
     """Test 3: Three similar tasks. Verify learning/reuse, step reduction, TTS reduction."""
     print("\n" + "=" * 60)
@@ -289,7 +326,11 @@ def test_similar_tasks():
         ef.start_run(
             task_name="Similar Task",
             task_description=f"Research task #{task_num + 1} — measuring learning curve",
-            goal="Find and compare market data" if task_num > 0 else "Research market data from scratch",
+            goal=(
+                "Find and compare market data"
+                if task_num > 0
+                else "Research market data from scratch"
+            ),
             tags=["acceptance", "similar", f"run-{task_num + 1}"],
         )
 
@@ -307,9 +348,15 @@ def test_similar_tasks():
     comparison = ef.haes_calculator.compare(haes_a, haes_b)
 
     print("\n📊 Results:")
-    print(f"  Task 1 — HAES: {haes_a['haes']}/100, TTS: {haes_a['tts']:.2f}s, Steps: {haes_a['total_steps']}")
-    print(f"  Task 2 — HAES: {results[1]['haes']['haes']}/100, TTS: {results[1]['haes']['tts']:.2f}s")
-    print(f"  Task 3 — HAES: {haes_b['haes']}/100, TTS: {haes_b['tts']:.2f}s, Steps: {haes_b['total_steps']}")
+    print(
+        f"  Task 1 — HAES: {haes_a['haes']}/100, TTS: {haes_a['tts']:.2f}s, Steps: {haes_a['total_steps']}"
+    )
+    print(
+        f"  Task 2 — HAES: {results[1]['haes']['haes']}/100, TTS: {results[1]['haes']['tts']:.2f}s"
+    )
+    print(
+        f"  Task 3 — HAES: {haes_b['haes']}/100, TTS: {haes_b['tts']:.2f}s, Steps: {haes_b['total_steps']}"
+    )
     print(f"\n  HAES Delta (T1→T3): {comparison['haes_delta']:+.1f}")
     print(f"  TTS Delta: {comparison['tts_delta']:+.2f}s")
 
@@ -338,6 +385,7 @@ def test_similar_tasks():
 
 # ── Test 4: CLI and Export ──────────────────────────────
 
+
 def test_cli_and_export():
     """Verify CLI commands work and export produces valid JSON."""
     print("\n" + "=" * 60)
@@ -353,14 +401,18 @@ def test_cli_and_export():
     for i in range(5):
         tc.new_step()
         tc.after_llm(prompt_tokens=500 + i * 100, utilization_pct=15 + i * 5)
-        tc.after_tools(tool_calls=[{"name": "read", "params": {}}],
-                       tool_outputs=[{"type": "tool_output", "content": "data"}])
-        tc.after_reflection(reflection={
-            "outcome": "progress",
-            "should_change_strategy": False,
-            "reasoning": "ok",
-            "suggestion": "continue",
-        })
+        tc.after_tools(
+            tool_calls=[{"name": "read", "params": {}}],
+            tool_outputs=[{"type": "tool_output", "content": "data"}],
+        )
+        tc.after_reflection(
+            reflection={
+                "outcome": "progress",
+                "should_change_strategy": False,
+                "reasoning": "ok",
+                "suggestion": "continue",
+            }
+        )
         tc.record()
 
     result = ef.stop_run(success=True)
@@ -407,6 +459,7 @@ def test_cli_and_export():
 
 # ── Test 5: EvalStore integrity ─────────────────────────
 
+
 def test_store_integrity():
     """Verify data integrity in EvalStore."""
     print("\n" + "=" * 60)
@@ -428,7 +481,8 @@ def test_store_integrity():
         # Record steps
         for i in range(10):
             sm = StepMetrics(
-                step_id=i, run_id=run.run_id,
+                step_id=i,
+                run_id=run.run_id,
                 timestamp=time.time(),
                 prompt_tokens=500 + i * 50,
                 context_budget=32000,
@@ -451,20 +505,35 @@ def test_store_integrity():
         assert steps[9]["step_id"] == 9
 
         # Save metrics
-        store.save_metrics(run.run_id, {
-            "tts": 1.5, "haes": 72.3,
-            "memory_efficiency": 14, "retrieval_quality": 10,
-            "planning_quality": 11, "reflection_value": 7,
-            "tool_efficiency": 8, "context_efficiency": 7,
-            "latency": 8, "recovery": 9, "learning_reuse": 5,
-            "total_steps": 10, "total_tool_calls": 20,
-            "prompt_avg_tokens": 750, "prompt_growth_ratio": 1.5,
-            "compression_ratio": 2.0, "memory_hit_rate": 0.6,
-            "tool_success_rate": 0.95, "useful_tool_rate": 0.85,
-            "plan_completion_rate": 0.8, "useful_reflection_rate": 0.7,
-            "recovery_success_rate": 1.0, "avg_step_latency_ms": 150,
-            "detail": {},
-        })
+        store.save_metrics(
+            run.run_id,
+            {
+                "tts": 1.5,
+                "haes": 72.3,
+                "memory_efficiency": 14,
+                "retrieval_quality": 10,
+                "planning_quality": 11,
+                "reflection_value": 7,
+                "tool_efficiency": 8,
+                "context_efficiency": 7,
+                "latency": 8,
+                "recovery": 9,
+                "learning_reuse": 5,
+                "total_steps": 10,
+                "total_tool_calls": 20,
+                "prompt_avg_tokens": 750,
+                "prompt_growth_ratio": 1.5,
+                "compression_ratio": 2.0,
+                "memory_hit_rate": 0.6,
+                "tool_success_rate": 0.95,
+                "useful_tool_rate": 0.85,
+                "plan_completion_rate": 0.8,
+                "useful_reflection_rate": 0.7,
+                "recovery_success_rate": 1.0,
+                "avg_step_latency_ms": 150,
+                "detail": {},
+            },
+        )
 
         metrics = store.get_metrics(run.run_id)
         assert metrics, "Metrics should exist"
@@ -508,6 +577,7 @@ def test_store_integrity():
 
 
 # ── Main ─────────────────────────────────────────────────
+
 
 def main():
     """Run all acceptance tests."""
