@@ -136,19 +136,21 @@ class MemoryManager:
     # ── Recording ───────────────────────────────────────
 
     def record_event(self, role: str, event_type: str, content: str,
-                     refs: list = None, meta: dict = None) -> str:
+                     refs: list = None, meta: dict = None,
+                     session_id: str = None) -> str:
         """
         Record event across all layers:
         IngestFilter → L3 → SQLite → FAISS → Mem0 (auto-extract every N events)
 
         Returns event_id.
         """
-        if not self._session_id:
+        sid = session_id or self._session_id
+        if not sid:
             raise RuntimeError("No active session. Call start_session() first.")
 
         # Ingestion filter: reject system prompts, tool traces, json blobs, reasoning, duplicates
         should_ingest, reason = self.ingestion_filter.should_ingest(
-            content, role, event_type, self._session_id
+            content, role, event_type, sid
         )
         if not should_ingest:
             # Log rejection and return a dummy id
@@ -162,14 +164,14 @@ class MemoryManager:
 
         # L3: immutable archive
         event_id = self.l3.record_event(
-            self._session_id, step_id,
+            sid, step_id,
             role=role, type=event_type, content=content,
             refs=refs, meta=meta
         )
 
         # SQLite: metadata
         self.sqlite.index_event(
-            event_id, self._session_id, step_id,
+            event_id, sid, step_id,
             role=role, type=event_type, content=content,
             refs=refs, meta=meta
         )
@@ -359,15 +361,22 @@ class MemoryManager:
 
         return prompt, stats
 
-    def _enrich_faiss_results(self, faiss_results: list[dict]) -> list[dict]:
-        """Enrich FAISS results with metadata from SQLite."""
+    def _enrich_faiss_results(self, faiss_results: list[dict], session_id: str = None) -> list[dict]:
+        """Enrich FAISS results with metadata from SQLite, filtered by session."""
+        sid = session_id or self._session_id
         enriched = []
         for fr in faiss_results:
             faiss_id = fr["faiss_id"]
-            vector_rows = self.sqlite.conn.execute(
-                "SELECT event_id, chunk_text FROM vector_map WHERE faiss_id = ?",
-                (faiss_id,)
-            ).fetchall()
+            if sid:
+                vector_rows = self.sqlite.conn.execute(
+                    "SELECT event_id, chunk_text FROM vector_map WHERE faiss_id = ? AND session_id = ?",
+                    (faiss_id, sid)
+                ).fetchall()
+            else:
+                vector_rows = self.sqlite.conn.execute(
+                    "SELECT event_id, chunk_text FROM vector_map WHERE faiss_id = ?",
+                    (faiss_id,)
+                ).fetchall()
             for vr in vector_rows:
                 evt_row = self.sqlite.conn.execute(
                     "SELECT role, type, content_preview FROM events WHERE event_id = ?",

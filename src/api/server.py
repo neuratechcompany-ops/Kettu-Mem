@@ -636,6 +636,18 @@ async def status_get():
     """Diagnostic status with storage health, counts, and last error."""
     uptime = time.time() - _startup_time if _startup_time else 0
     storage_status = {"sqlite": "healthy", "faiss": "healthy", "archive": "healthy"}
+    # Real check — probe each storage layer
+    if _mm:
+        try: _mm.sqlite._conn.execute("SELECT 1"); 
+        except: storage_status["sqlite"] = "degraded"
+        try: 
+            if _mm.faiss.is_index_healthy(): pass
+            else: storage_status["faiss"] = "degraded"
+        except: storage_status["faiss"] = "unavailable"
+        try: 
+            sess = _mm._session_id or "check"
+            _mm.l3.get_event_count(sess)
+        except: storage_status["archive"] = "degraded"
     counts = {"facts": 0, "sessions": 0, "vectors": 0, "archive_events": 0}
     last_ingest = None
     mem_usage = 0

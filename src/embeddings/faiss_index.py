@@ -132,10 +132,12 @@ class FAISSSemanticIndex:
         return vecs / norms
 
     def _embed_random(self, texts: list[str]) -> np.ndarray:
-        """Fallback: deterministic pseudo-random based on text hash."""
+        """Fallback: deterministic SHA-256 seed — stable across restarts."""
+        import hashlib
         vecs = np.zeros((len(texts), self._dim), dtype=np.float32)
         for i, t in enumerate(texts):
-            seed = hash(t) % (2**31)
+            sha = hashlib.sha256(t.encode('utf-8')).digest()
+            seed = int.from_bytes(sha[:4], 'big') % (2**31)
             rng = np.random.RandomState(seed)
             vecs[i] = rng.randn(self._dim).astype(np.float32)
         # Normalize
