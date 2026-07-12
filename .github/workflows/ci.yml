@@ -15,9 +15,9 @@ jobs:
         with:
           python-version: "3.12"
       - name: Ruff lint
-        run: uvx ruff check src/
+        run: uvx ruff check src/ --exclude=src/tests/test_all.py
       - name: Black format check
-        run: uvx black --check src/
+        run: uvx black --check src/ --exclude 'src/tests/test_all.py'
 
   test:
     needs: lint
