@@ -13,3 +13,4 @@ secrets/
 *.pem
 /tmp/
 /logs/
+.venv/

@@ -353,7 +353,7 @@ async def turn_before(body: TurnBeforeRequest):
 async def turn_after(body: TurnAfterRequest):
     """Record events after LLM call."""
     events = body.events
-    extract_facts = body.extract_facts
+    session_id = body.session_id or (_mm._session_id if _mm else None)
 
     recorded = []
     for evt in events:
@@ -363,11 +363,12 @@ async def turn_after(body: TurnAfterRequest):
             content=evt.get("content", ""),
             refs=evt.get("refs"),
             meta=evt.get("meta"),
+            session_id=session_id,
         )
         recorded.append(eid)
 
     stats = _mm.mem0.get_stats() if _mm else {}
-    recent_count = _mm.sqlite.get_session_info(_mm._session_id).get("total_events", 0) if _mm else 0
+    recent_count = _mm.sqlite.get_session_info(session_id).get("total_events", 0) if _mm else 0
 
     return {
         "status": "recorded",
@@ -669,13 +670,16 @@ async def status_get():
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    """Global error handler with structured output."""
+    """Global error handler — safe, no traceback leak."""
+    import uuid
+    rid = str(uuid.uuid4())[:8]
+    logger.error("unhandled_exception", request_id=rid, error=str(exc),
+                 path=str(request.url.path), exc_info=True)
+    if _error_buffer:
+        _error_buffer.record("server", str(exc)[:200], "unhandled", rid)
     return JSONResponse(
         status_code=500,
-        content={
-            "error": str(exc),
-            "trace": traceback.format_exc(),
-        },
+        content={"error": "internal_error", "request_id": rid},
     )
 
 
@@ -702,7 +706,7 @@ def run_server(data_dir: str = None, port: int = 8765, host: str = "127.0.0.1"):
 
 if __name__ == "__main__":
     import argparse
-    parser = argparse.ArgumentParser(description="Kettu Mem v0.2.1")
+    parser = argparse.ArgumentParser(description="Kettu Mem v0.3.1")
     parser.add_argument("--data-dir", default="/tmp/mm-server")
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--host", default="127.0.0.1")
