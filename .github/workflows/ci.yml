@@ -34,11 +34,14 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Install
         run: |
+          unset VIRTUAL_ENV
           pip install fastapi uvicorn pydantic pydantic-settings structlog \
             prometheus-client psutil python-multipart numpy faiss-cpu tiktoken openai \
             sentence-transformers pytest pytest-cov
       - name: pytest
-        run: python -m pytest src/tests/ -v --tb=short
+        run: |
+          unset VIRTUAL_ENV
+          python -m pytest src/tests/ -v --tb=short
 
   build:
     needs: test
