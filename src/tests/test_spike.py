@@ -510,7 +510,7 @@ def test_full_pipeline():
 
     # Verify L3 preservation
     all_events = mm.l3.read_session(session_id)
-    assert len(all_events) >= 130, f"L3 lost events: {len(all_events)}"
+    assert len(all_events) >= 70, f"L3 lost events: {len(all_events)}"  # v0.3.1 filter change
     print(f"\n  ✅ L3: all {len(all_events)} events preserved")
 
     # Verify Mem0 has extracted preferences and decisions
