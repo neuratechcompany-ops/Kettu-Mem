@@ -15,7 +15,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install
-        run: uv pip install ruff black --python $(which python)
+        run: uv pip install ruff black --python $(which python3)
       - name: Ruff lint
         run: ruff check src/
       - name: Black format check
@@ -24,7 +24,9 @@ jobs:
   test:
     needs: lint
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     strategy:
+      fail-fast: false
       matrix:
         python-version: ["3.11", "3.12"]
     steps:
@@ -32,29 +34,46 @@ jobs:
       - uses: astral-sh/setup-uv@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Install and test
+      - name: Create venv
+        run: uv venv --python ${{ matrix.python-version }} .test-venv
+      - name: Install deps
         run: |
-          uv venv --python ${{ matrix.python-version }} .test-venv
           uv pip install --python .test-venv/bin/python \
             fastapi uvicorn pydantic pydantic-settings structlog \
-            prometheus-client psutil python-multipart numpy faiss-cpu \
-            tiktoken openai sentence-transformers pytest pytest-cov
-          .test-venv/bin/python -m pytest src/tests/ -v --tb=short
+            prometheus-client psutil python-multipart \
+            numpy faiss-cpu tiktoken openai \
+            pytest pytest-timeout
+      - name: Run tests
+        run: |
+          .test-venv/bin/python -m pytest src/tests/ \
+            -v --tb=short --durations=20 --timeout=120
 
   build:
     needs: test
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - name: Docker build
         run: docker build -t kettu-mem:test .
       - name: Docker smoke
         run: |
+          set -euo pipefail
           docker run -d --name kettu-test -p 18765:8765 kettu-mem:test
-          for i in $(seq 1 10); do
-            sleep 3
-            curl -fsS http://localhost:18765/health && break || echo "retry $i..."
+          success=0
+          for i in $(seq 1 20); do
+            if curl -fsS http://localhost:18765/health; then
+              success=1; break
+            fi
+            if [ "$(docker inspect -f '{{.State.Running}}' kettu-test 2>/dev/null || true)" != "true" ]; then
+              echo "Container stopped — logs:"; docker logs kettu-test || true; exit 1
+            fi
+            sleep 2
           done
-          curl -fsS http://localhost:18765/health | grep ok
-          curl -fsS http://localhost:18765/status
+          if [ "$success" -ne 1 ]; then
+            echo "Health not ready — logs:"; docker logs kettu-test || true; exit 1
+          fi
+          curl -fsS http://localhost:18765/health | grep '"status":"ok"'
+          curl -fsS http://localhost:18765/status | grep '"version":"0.3.1"'
+          docker logs kettu-test
           docker stop kettu-test

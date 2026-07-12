@@ -220,7 +220,7 @@ async def lifespan(app: FastAPI):
     _error_buffer = ErrorRingBuffer(Path(data) / "error_buffer.json")
     metrics.set_memory_manager(_mm)
     setup_logging()
-    logger.info("server_starting", data_dir=data, version="0.4.0")
+    logger.info("server_starting", data_dir=data, version="0.3.1")
 
     yield
 
@@ -234,7 +234,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Kettu Mem",
-    version="0.4.0",
+    version="0.3.1",
     description="Cognitive Memory Layer for OpenClaw agents",
     lifespan=lifespan,
 )
@@ -761,7 +761,7 @@ async def status_get():
     return {
         "status": "healthy",
         "uptime_seconds": int(uptime),
-        "version": "0.4.0",
+        "version": "0.3.1",
         "storage": storage_status,
         "counts": counts,
         "memory_usage_mb": mem_usage,
@@ -803,7 +803,7 @@ def run_server(data_dir: str = None, port: int = 8765, host: str = "127.0.0.1"):
     _data_dir = data_dir or "/tmp/mm-server"
     _port = port
 
-    logger.info("server_boot", host=host, port=port, version="0.4.0")
+    logger.info("server_boot", host=host, port=port, version="0.3.1")
 
     uvicorn.run(
         "api.server:app",
@@ -817,7 +817,7 @@ def run_server(data_dir: str = None, port: int = 8765, host: str = "127.0.0.1"):
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description="Kettu Mem v0.4.0")
+    parser = argparse.ArgumentParser(description="Kettu Mem v0.3.1")
     parser.add_argument("--data-dir", default="/tmp/mm-server")
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--host", default="127.0.0.1")
