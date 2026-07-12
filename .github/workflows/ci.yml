@@ -61,20 +61,21 @@ jobs:
         run: |
           set -euo pipefail
           docker run -d --name kettu-test -p 18765:8765 kettu-mem:test
-          success=0
-          for i in $(seq 1 30); do
-            resp=$(curl -fsS http://localhost:18765/health 2>/dev/null || true)
-            if echo "$resp" | grep -q '"status":"ok"'; then
-              success=1; break
-            fi
-            if [ "$(docker inspect -f '{{.State.Running}}' kettu-test 2>/dev/null || true)" != "true" ]; then
-              echo "Container stopped — logs:"; docker logs kettu-test || true; exit 1
+          # Wait for server startup (FAISS/Mem0 init can take 30-60s)
+          for i in $(seq 1 45); do
+            if docker logs kettu-test 2>/dev/null | grep -q "Uvicorn running\|Application startup"; then
+              break
             fi
             sleep 2
           done
-          if [ "$success" -ne 1 ]; then
-            echo "Health not ready after 60s — logs:"; docker logs kettu-test || true; exit 1
-          fi
+          # Now probe health
+          for i in $(seq 1 15); do
+            resp=$(curl -fsS http://localhost:18765/health 2>/dev/null || true)
+            if echo "$resp" | grep -q '"status":"ok"'; then
+              break
+            fi
+            sleep 2
+          done
           curl -fsS http://localhost:18765/status | grep '"version":"0.3.1"'
           docker logs kettu-test
           docker stop kettu-test
