@@ -57,12 +57,14 @@ jobs:
       - name: Docker build
         run: docker build -t kettu-mem:test .
       - name: Docker smoke
+        timeout-minutes: 10
         run: |
           set -euo pipefail
           docker run -d --name kettu-test -p 18765:8765 kettu-mem:test
           success=0
-          for i in $(seq 1 20); do
-            if curl -fsS http://localhost:18765/health; then
+          for i in $(seq 1 30); do
+            resp=$(curl -fsS http://localhost:18765/health 2>/dev/null || true)
+            if echo "$resp" | grep -q '"status":"ok"'; then
               success=1; break
             fi
             if [ "$(docker inspect -f '{{.State.Running}}' kettu-test 2>/dev/null || true)" != "true" ]; then
@@ -71,9 +73,8 @@ jobs:
             sleep 2
           done
           if [ "$success" -ne 1 ]; then
-            echo "Health not ready — logs:"; docker logs kettu-test || true; exit 1
+            echo "Health not ready after 60s — logs:"; docker logs kettu-test || true; exit 1
           fi
-          curl -fsS http://localhost:18765/health | grep '"status":"ok"'
           curl -fsS http://localhost:18765/status | grep '"version":"0.3.1"'
           docker logs kettu-test
           docker stop kettu-test
