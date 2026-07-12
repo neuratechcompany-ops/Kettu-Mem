@@ -35,10 +35,10 @@ jobs:
       - name: Install and test
         run: |
           uv venv --python ${{ matrix.python-version }} .test-venv
-          .test-venv/bin/pip install \
+          uv pip install --python .test-venv/bin/python \
             fastapi uvicorn pydantic pydantic-settings structlog \
-            prometheus-client psutil python-multipart numpy faiss-cpu tiktoken openai \
-            sentence-transformers pytest pytest-cov
+            prometheus-client psutil python-multipart numpy faiss-cpu \
+            tiktoken openai sentence-transformers pytest pytest-cov
           .test-venv/bin/python -m pytest src/tests/ -v --tb=short
 
   build:
