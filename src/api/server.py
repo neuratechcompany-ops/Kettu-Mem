@@ -712,62 +712,46 @@ async def ingest_event(request: Request):
 @app.get("/status")
 async def status_get():
     """Diagnostic status with storage health, counts, and last error."""
-    uptime = time.time() - _startup_time if _startup_time else 0
-    storage_status = {"sqlite": "healthy", "faiss": "healthy", "archive": "healthy"}
-    # Real check — probe each storage layer
-    if _mm:
-        try:
-            _mm.sqlite._conn.execute("SELECT 1")
-        except Exception:
-            storage_status["sqlite"] = "degraded"
-        try:
-            if _mm.faiss.is_index_healthy():
-                pass
-            else:
-                storage_status["faiss"] = "degraded"
-        except Exception:
-            storage_status["faiss"] = "unavailable"
-        try:
-            sess = _mm._session_id or "check"
-            _mm.l3.get_event_count(sess)
-        except Exception:
-            storage_status["archive"] = "degraded"
-    counts = {"facts": 0, "sessions": 0, "vectors": 0, "archive_events": 0}
-    last_ingest = None
-    mem_usage = 0
+    try:
+        uptime = time.time() - _startup_time if _startup_time else 0
+        storage_status = {"sqlite": "healthy", "faiss": "healthy", "archive": "healthy"}
+        counts = {"facts": 0, "sessions": 0, "vectors": 0, "archive_events": 0}
+        last_ingest = None
+        mem_usage = 0
+        last_err = None
 
-    if _mm:
-        try:
-            counts["facts"] = len(_mm.mem0._facts) if hasattr(_mm.mem0, "_facts") else 0
-            counts["vectors"] = (
-                _mm.mem0._collection.count() if hasattr(_mm.mem0, "_collection") else 0
-            )
-        except Exception:
-            pass
-        try:
-            import psutil
+        if _mm:
+            try:
+                _mm.sqlite._conn.execute("SELECT 1")
+            except Exception:
+                storage_status["sqlite"] = "degraded"
+        if _error_buffer:
+            last_err = _error_buffer.last_error
 
-            mem_usage = psutil.Process().memory_info().rss // (1024 * 1024)
-        except Exception:
-            pass
+        if _cr and _cr.last_ingest_at:
+            last_ingest = _cr.last_ingest_at
 
-    if _cr and _cr.last_ingest_at:
-        last_ingest = _cr.last_ingest_at
-
-    last_err = None
-    if _error_buffer:
-        last_err = _error_buffer.last_error
-
-    return {
-        "status": "healthy",
-        "uptime_seconds": int(uptime),
-        "version": "0.3.1",
-        "storage": storage_status,
-        "counts": counts,
-        "memory_usage_mb": mem_usage,
-        "last_ingest_at": last_ingest,
-        "last_error": last_err,
-    }
+        return {
+            "status": "healthy",
+            "uptime_seconds": int(uptime),
+            "version": "0.3.1",
+            "storage": storage_status,
+            "counts": counts,
+            "memory_usage_mb": mem_usage,
+            "last_ingest_at": last_ingest,
+            "last_error": last_err,
+        }
+    except Exception as e:
+        return {
+            "status": "degraded",
+            "uptime_seconds": 0,
+            "version": "0.3.1",
+            "storage": {"sqlite": "unknown", "faiss": "unknown", "archive": "unknown"},
+            "counts": {},
+            "memory_usage_mb": 0,
+            "last_ingest_at": None,
+            "last_error": str(e)[:200],
+        }
 
 
 # ── Error handler ───────────────────────────────────────
