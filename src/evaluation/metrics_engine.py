@@ -15,9 +15,8 @@ Metric groups:
 Input: list of step dicts from EvalStore
 Output: dict of metric groups with scores and raw numbers
 """
+
 import math
-from collections import defaultdict
-from typing import Optional
 
 
 class MetricsEngine:
@@ -31,8 +30,9 @@ class MetricsEngine:
 
     # ── Public API ──────────────────────────────────────
 
-    def calculate(self, steps: list[dict], run_meta: dict = None,
-                  previous_runs: list[dict] = None) -> dict:
+    def calculate(
+        self, steps: list[dict], run_meta: dict = None, previous_runs: list[dict] = None
+    ) -> dict:
         """
         Calculate all metric groups from step data.
 
@@ -129,26 +129,26 @@ class MetricsEngine:
         # Max 20 pts
         score = 0
         if compression_ratio >= 5:
-            score += 8   # excellent compression
+            score += 8  # excellent compression
         elif compression_ratio >= 2:
             score += 5
         elif compression_ratio >= 1:
             score += 3
 
         if hit_rate >= 0.5:
-            score += 6   # memory is actively used
+            score += 6  # memory is actively used
         elif hit_rate >= 0.3:
             score += 4
         elif hit_rate > 0:
             score += 2
 
         if avg_pollution < 0.1:
-            score += 4   # clean memory
+            score += 4  # clean memory
         elif avg_pollution < 0.3:
             score += 2
 
         if prompt_growth < 1.5:
-            score += 2   # stable prompt size
+            score += 2  # stable prompt size
 
         return {
             "prompt_compression_ratio": compression_ratio,
@@ -177,8 +177,11 @@ class MetricsEngine:
         false_retrievals = sum(1 for s in steps if s.get("false_retrieval"))
         false_rate = round(false_retrievals / max(n, 1), 3)
 
-        search_latencies = [s.get("semantic_search_latency_ms", 0) for s in steps
-                           if s.get("semantic_search_latency_ms")]
+        search_latencies = [
+            s.get("semantic_search_latency_ms", 0)
+            for s in steps
+            if s.get("semantic_search_latency_ms")
+        ]
         avg_search_latency = round(self._avg(search_latencies), 1)
 
         lookup_successes = sum(1 for s in steps if s.get("archive_ref_lookup_success"))
@@ -284,7 +287,9 @@ class MetricsEngine:
         strategy_changes = sum(1 for s in steps if s.get("strategy_changed"))
 
         useful_rate = round(useful / max(reflections_ran, 1), 3) if reflections_ran else 0
-        behavior_change_rate = round(strategy_changes / max(stuck + loops, 1), 3) if (stuck + loops) else 0
+        behavior_change_rate = (
+            round(strategy_changes / max(stuck + loops, 1), 3) if (stuck + loops) else 0
+        )
 
         # Score: max 10 pts
         score = 0
@@ -419,11 +424,17 @@ class MetricsEngine:
     def _calc_latency(self, steps: list[dict]) -> dict:
         n = len(steps)
 
-        total_vals = [s.get("total_step_latency_ms", 0) for s in steps if s.get("total_step_latency_ms")]
+        total_vals = [
+            s.get("total_step_latency_ms", 0) for s in steps if s.get("total_step_latency_ms")
+        ]
         llm_vals = [s.get("llm_latency_ms", 0) for s in steps if s.get("llm_latency_ms")]
         tool_vals = [s.get("tool_latency_ms", 0) for s in steps if s.get("tool_latency_ms")]
-        retrieval_vals = [s.get("retrieval_latency_ms", 0) for s in steps if s.get("retrieval_latency_ms")]
-        reflection_vals = [s.get("reflection_latency_ms", 0) for s in steps if s.get("reflection_latency_ms")]
+        retrieval_vals = [
+            s.get("retrieval_latency_ms", 0) for s in steps if s.get("retrieval_latency_ms")
+        ]
+        reflection_vals = [
+            s.get("reflection_latency_ms", 0) for s in steps if s.get("reflection_latency_ms")
+        ]
 
         avg_total = round(self._avg(total_vals), 1)
         p50_total = self._percentile(total_vals, 50)
@@ -513,8 +524,9 @@ class MetricsEngine:
 
     # ── Learning / Reuse (10 pts) ───────────────────────
 
-    def _calc_learning_reuse(self, steps: list[dict], run_meta: dict,
-                             previous_runs: list[dict] = None) -> dict:
+    def _calc_learning_reuse(
+        self, steps: list[dict], run_meta: dict, previous_runs: list[dict] = None
+    ) -> dict:
         """
         Compare against previous similar runs to measure learning.
 
@@ -535,8 +547,7 @@ class MetricsEngine:
         n = len(steps)
         tts = self._calc_tts(run_meta, steps)
 
-        similar = [r for r in previous_runs
-                   if r.get("task_type") == run_meta.get("task_name", "")]
+        similar = [r for r in previous_runs if r.get("task_type") == run_meta.get("task_name", "")]
 
         steps_reduction = 0
         tts_reduction = 0

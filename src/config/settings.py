@@ -12,9 +12,10 @@ Usage:
   from config import settings
   print(settings.data_dir)
 """
-import os
+
 from pathlib import Path
 from typing import Optional
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 

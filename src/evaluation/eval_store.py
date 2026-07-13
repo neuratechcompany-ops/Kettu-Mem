@@ -11,11 +11,12 @@ Stores:
 
 Storage path: ~/.openclaw/evaluation-store/
 """
+
 import json
 import sqlite3
 import time
 import uuid
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Optional
 
@@ -23,6 +24,7 @@ from typing import Optional
 @dataclass
 class RunMeta:
     """Metadata for one evaluation run."""
+
     run_id: str
     session_id: str = ""
     task_name: str = ""
@@ -41,6 +43,7 @@ class RunMeta:
 @dataclass
 class StepMetrics:
     """Per-step telemetry data."""
+
     step_id: int
     run_id: str
     timestamp: float = 0
@@ -271,9 +274,14 @@ class EvalStore:
 
     # ── Run management ───────────────────────────────────
 
-    def create_run(self, task_name: str = "", task_description: str = "",
-                   goal: str = "", session_id: str = "",
-                   tags: list[str] = None) -> RunMeta:
+    def create_run(
+        self,
+        task_name: str = "",
+        task_description: str = "",
+        goal: str = "",
+        session_id: str = "",
+        tags: list[str] = None,
+    ) -> RunMeta:
         """Create a new evaluation run."""
         run_id = str(uuid.uuid4())[:12]
         run = RunMeta(
@@ -290,28 +298,36 @@ class EvalStore:
             """INSERT INTO runs (run_id, session_id, task_name, task_description,
                goal, start_time, status, tags, created_at)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (run.run_id, run.session_id, run.task_name, run.task_description,
-             run.goal, run.start_time, run.status, json.dumps(run.tags), time.time())
+            (
+                run.run_id,
+                run.session_id,
+                run.task_name,
+                run.task_description,
+                run.goal,
+                run.start_time,
+                run.status,
+                json.dumps(run.tags),
+                time.time(),
+            ),
         )
         self.conn.commit()
         return run
 
-    def complete_run(self, run_id: str, success: bool = True,
-                     fail_reason: str = "", artifact_path: str = ""):
+    def complete_run(
+        self, run_id: str, success: bool = True, fail_reason: str = "", artifact_path: str = ""
+    ):
         """Mark run as completed or failed."""
         status = "completed" if success else "failed"
         self.conn.execute(
             """UPDATE runs SET end_time=?, status=?, fail_reason=?,
                artifact_path=? WHERE run_id=?""",
-            (time.time(), status, fail_reason, artifact_path, run_id)
+            (time.time(), status, fail_reason, artifact_path, run_id),
         )
         self.conn.commit()
 
     def get_run(self, run_id: str) -> Optional[dict]:
         """Get run metadata."""
-        row = self.conn.execute(
-            "SELECT * FROM runs WHERE run_id=?", (run_id,)
-        ).fetchone()
+        row = self.conn.execute("SELECT * FROM runs WHERE run_id=?", (run_id,)).fetchone()
         return dict(row) if row else None
 
     def list_runs(self, limit: int = 20, status: str = None) -> list[dict]:
@@ -319,7 +335,7 @@ class EvalStore:
         if status:
             rows = self.conn.execute(
                 "SELECT * FROM runs WHERE status=? ORDER BY created_at DESC LIMIT ?",
-                (status, limit)
+                (status, limit),
             ).fetchall()
         else:
             rows = self.conn.execute(
@@ -339,7 +355,7 @@ class EvalStore:
         self.conn.execute(
             f"INSERT OR REPLACE INTO steps ({','.join(columns)}) "
             f"VALUES ({','.join(placeholders)})",
-            values
+            values,
         )
         self.conn.commit()
 
@@ -393,79 +409,111 @@ class EvalStore:
         columns = ", ".join(params.keys())
         placeholders = ", ".join(f":{k}" for k in params.keys())
         self.conn.execute(
-            f"INSERT OR REPLACE INTO metrics ({columns}) VALUES ({placeholders})",
-            params
+            f"INSERT OR REPLACE INTO metrics ({columns}) VALUES ({placeholders})", params
         )
         self.conn.commit()
 
     def get_metrics(self, run_id: str) -> Optional[dict]:
         """Get metrics for a run."""
-        row = self.conn.execute(
-            "SELECT * FROM metrics WHERE run_id=?", (run_id,)
-        ).fetchone()
+        row = self.conn.execute("SELECT * FROM metrics WHERE run_id=?", (run_id,)).fetchone()
         return dict(row) if row else None
 
     # ── Benchmarks ──────────────────────────────────────
 
-    def save_benchmark(self, name: str, description: str, task_type: str,
-                       baseline_haes: float, baseline_tts: float,
-                       metrics: dict) -> str:
+    def save_benchmark(
+        self,
+        name: str,
+        description: str,
+        task_type: str,
+        baseline_haes: float,
+        baseline_tts: float,
+        metrics: dict,
+    ) -> str:
         """Save a benchmark baseline."""
         bid = str(uuid.uuid4())[:8]
         self.conn.execute(
             """INSERT INTO benchmarks (benchmark_id, name, description, task_type,
                baseline_haes, baseline_tts, metrics_json, created_at)
                VALUES (?,?,?,?,?,?,?,?)""",
-            (bid, name, description, task_type, baseline_haes, baseline_tts,
-             json.dumps(metrics, ensure_ascii=False), time.time())
+            (
+                bid,
+                name,
+                description,
+                task_type,
+                baseline_haes,
+                baseline_tts,
+                json.dumps(metrics, ensure_ascii=False),
+                time.time(),
+            ),
         )
         self.conn.commit()
         # Also save as JSON artifact
         bench_path = self._benchmarks_dir / f"{bid}.json"
         with open(bench_path, "w") as f:
-            json.dump({
-                "benchmark_id": bid, "name": name, "description": description,
-                "task_type": task_type, "baseline_haes": baseline_haes,
-                "baseline_tts": baseline_tts, "metrics": metrics,
-            }, f, ensure_ascii=False, indent=2)
+            json.dump(
+                {
+                    "benchmark_id": bid,
+                    "name": name,
+                    "description": description,
+                    "task_type": task_type,
+                    "baseline_haes": baseline_haes,
+                    "baseline_tts": baseline_tts,
+                    "metrics": metrics,
+                },
+                f,
+                ensure_ascii=False,
+                indent=2,
+            )
         return bid
 
     def get_benchmarks(self, task_type: str = None) -> list[dict]:
         """List benchmarks, optionally filtered by task type."""
         if task_type:
             rows = self.conn.execute(
-                "SELECT * FROM benchmarks WHERE task_type=? ORDER BY created_at DESC",
-                (task_type,)
+                "SELECT * FROM benchmarks WHERE task_type=? ORDER BY created_at DESC", (task_type,)
             ).fetchall()
         else:
-            rows = self.conn.execute(
-                "SELECT * FROM benchmarks ORDER BY created_at DESC"
-            ).fetchall()
+            rows = self.conn.execute("SELECT * FROM benchmarks ORDER BY created_at DESC").fetchall()
         return [dict(r) for r in rows]
 
     # ── Comparisons ─────────────────────────────────────
 
-    def save_comparison(self, run_a: str, run_b: str,
-                        haes_delta: float, tts_delta: float,
-                        detail: dict) -> str:
+    def save_comparison(
+        self, run_a: str, run_b: str, haes_delta: float, tts_delta: float, detail: dict
+    ) -> str:
         """Save comparison between two runs."""
         cid = str(uuid.uuid4())[:8]
         self.conn.execute(
             """INSERT INTO comparisons (comparison_id, run_a, run_b,
                haes_delta, tts_delta, detail_json, created_at)
                VALUES (?,?,?,?,?,?,?)""",
-            (cid, run_a, run_b, haes_delta, tts_delta,
-             json.dumps(detail, ensure_ascii=False), time.time())
+            (
+                cid,
+                run_a,
+                run_b,
+                haes_delta,
+                tts_delta,
+                json.dumps(detail, ensure_ascii=False),
+                time.time(),
+            ),
         )
         self.conn.commit()
         # JSON artifact
         comp_path = self._comparisons_dir / f"{cid}.json"
         with open(comp_path, "w") as f:
-            json.dump({
-                "comparison_id": cid, "run_a": run_a, "run_b": run_b,
-                "haes_delta": haes_delta, "tts_delta": tts_delta,
-                "detail": detail,
-            }, f, ensure_ascii=False, indent=2)
+            json.dump(
+                {
+                    "comparison_id": cid,
+                    "run_a": run_a,
+                    "run_b": run_b,
+                    "haes_delta": haes_delta,
+                    "tts_delta": tts_delta,
+                    "detail": detail,
+                },
+                f,
+                ensure_ascii=False,
+                indent=2,
+            )
         return cid
 
     def get_comparisons(self, limit: int = 10) -> list[dict]:
@@ -506,9 +554,7 @@ class EvalStore:
         failed = self.conn.execute(
             "SELECT COUNT(*) as c FROM runs WHERE status='failed'"
         ).fetchone()["c"]
-        benchmarks = self.conn.execute(
-            "SELECT COUNT(*) as c FROM benchmarks"
-        ).fetchone()["c"]
+        benchmarks = self.conn.execute("SELECT COUNT(*) as c FROM benchmarks").fetchone()["c"]
 
         avg_haes = None
         if completed > 0:

@@ -15,11 +15,12 @@ Architecture:
 - FAISS index: stores vectors, returns by faiss_id
 - L3 archive: full event content retrieved by event_id
 """
+
 import json
 import os
-import time
-import numpy as np
 from pathlib import Path
+
+import numpy as np
 
 from utils.logging import get_logger
 
@@ -66,6 +67,7 @@ class FAISSSemanticIndex:
         if openai_key:
             try:
                 from openai import OpenAI
+
                 self._openai_client = OpenAI(api_key=openai_key)
                 # Verify with a small test
                 test_resp = self._openai_client.embeddings.create(
@@ -76,7 +78,9 @@ class FAISSSemanticIndex:
                 self._dim = len(test_resp.data[0].embedding)
                 self._backend = "openai"
                 self._model = True  # flag: backend ready
-                logger.info("faiss_backend_loaded", backend="openai", model=self.OPENAI_MODEL, dim=self._dim)
+                logger.info(
+                    "faiss_backend_loaded", backend="openai", model=self.OPENAI_MODEL, dim=self._dim
+                )
                 return
             except Exception as e:
                 logger.warning("faiss_openai_unavailable", error=str(e))
@@ -84,10 +88,16 @@ class FAISSSemanticIndex:
         # 2. sentence-transformers (local)
         try:
             from sentence_transformers import SentenceTransformer
+
             self._model = SentenceTransformer(self.model_name)
             self._dim = self._model.get_sentence_embedding_dimension()
             self._backend = "sentence_transformers"
-            logger.info("faiss_backend_loaded", backend="sentence_transformers", model=self.model_name, dim=self._dim)
+            logger.info(
+                "faiss_backend_loaded",
+                backend="sentence_transformers",
+                model=self.model_name,
+                dim=self._dim,
+            )
             return
         except (ImportError, Exception) as e:
             logger.warning("faiss_local_unavailable", error=str(e))
@@ -116,7 +126,7 @@ class FAISSSemanticIndex:
         all_embeddings = []
         batch_size = 100
         for i in range(0, len(texts), batch_size):
-            batch = texts[i:i + batch_size]
+            batch = texts[i : i + batch_size]
             resp = self._openai_client.embeddings.create(
                 model=self.OPENAI_MODEL,
                 input=batch,
@@ -132,10 +142,13 @@ class FAISSSemanticIndex:
         return vecs / norms
 
     def _embed_random(self, texts: list[str]) -> np.ndarray:
-        """Fallback: deterministic pseudo-random based on text hash."""
+        """Fallback: deterministic SHA-256 seed — stable across restarts."""
+        import hashlib
+
         vecs = np.zeros((len(texts), self._dim), dtype=np.float32)
         for i, t in enumerate(texts):
-            seed = hash(t) % (2**31)
+            sha = hashlib.sha256(t.encode("utf-8")).digest()
+            seed = int.from_bytes(sha[:4], "big") % (2**31)
             rng = np.random.RandomState(seed)
             vecs[i] = rng.randn(self._dim).astype(np.float32)
         # Normalize
@@ -206,9 +219,7 @@ class FAISSSemanticIndex:
                 id_map = json.load(f)
             return index, id_map["ids"]
         except (RuntimeError, OSError, json.JSONDecodeError, ValueError) as e:
-            logger.warning("faiss_index_corrupted",
-                           path=str(index_path),
-                           error=str(e))
+            logger.warning("faiss_index_corrupted", path=str(index_path), error=str(e))
             # Clean up corrupted files so a rebuild can proceed cleanly
             for p in (index_path, id_map_path):
                 try:
@@ -229,7 +240,6 @@ class FAISSSemanticIndex:
         Returns list of {faiss_id, score, chunk_text}.
         chunk_text must be resolved via SQLite vector_map.
         """
-        import faiss
 
         index, ids = self.load_index()
         if index is None or len(ids) == 0:
@@ -242,10 +252,12 @@ class FAISSSemanticIndex:
         for score, idx in zip(scores[0], indices[0]):
             if idx < 0 or idx >= len(ids):
                 continue
-            results.append({
-                "faiss_id": ids[idx],
-                "score": float(score),
-            })
+            results.append(
+                {
+                    "faiss_id": ids[idx],
+                    "score": float(score),
+                }
+            )
         return results
 
     def add_vectors(self, texts: list[str], start_id: int) -> int:

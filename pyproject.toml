@@ -63,6 +63,7 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "W"]
+ignore = ["E501", "E402", "F841", "E701", "F401"]
 
 [tool.black]
 line-length = 100

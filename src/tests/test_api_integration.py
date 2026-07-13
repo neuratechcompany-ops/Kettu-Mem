@@ -4,10 +4,10 @@ HTTP integration tests for Kettu Mem v0.2.1.
 Tests auth (401/200), payload validation (422), and public endpoints.
 Uses fastapi.testclient.TestClient with HERMES_MEMORY_API_KEY set.
 """
-import os
+
+import shutil
 import sys
 import tempfile
-import shutil
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -19,6 +19,7 @@ import pytest
 def _clear_module_state():
     """Reset global state between tests."""
     import api.server as server_module
+
     server_module._mm = None
     server_module._cr = None
     server_module._data_dir = ""
@@ -45,8 +46,10 @@ class TestHTTPIntegration:
 
         # Reload security and server modules to pick up the env var
         import importlib
+
         import api.security
         import api.server
+
         importlib.reload(api.security)
         importlib.reload(api.server)
 
@@ -56,6 +59,7 @@ class TestHTTPIntegration:
         server._cr = None
 
         from fastapi.testclient import TestClient
+
         with TestClient(server.app, raise_server_exceptions=False) as tc:
             yield tc
 

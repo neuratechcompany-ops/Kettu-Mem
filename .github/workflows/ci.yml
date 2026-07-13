@@ -14,15 +14,19 @@ jobs:
       - uses: astral-sh/setup-uv@v5
         with:
           python-version: "3.12"
+      - name: Install
+        run: uv pip install ruff black --python $(which python3)
       - name: Ruff lint
-        run: uvx ruff check src/
+        run: ruff check src/
       - name: Black format check
-        run: uvx black --check src/
+        run: black --check src/
 
   test:
     needs: lint
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     strategy:
+      fail-fast: false
       matrix:
         python-version: ["3.11", "3.12"]
     steps:
@@ -30,29 +34,48 @@ jobs:
       - uses: astral-sh/setup-uv@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Install dependencies
+      - name: Create venv
+        run: uv venv --python ${{ matrix.python-version }} .test-venv
+      - name: Install deps
         run: |
-          uv pip install --system fastapi uvicorn pydantic-settings structlog prometheus-client psutil python-multipart faiss-cpu numpy openai tiktoken pandas
-          uv pip install --system pytest pytest-cov
-      - name: Run tests with coverage
-        run: python -m pytest src/tests/ -v --tb=short --cov=src --cov-report=xml
-      - name: Upload coverage
-        uses: codecov/codecov-action@v4
-        with:
-          file: ./coverage.xml
+          uv pip install --python .test-venv/bin/python \
+            fastapi uvicorn pydantic pydantic-settings structlog \
+            prometheus-client psutil python-multipart \
+            numpy faiss-cpu tiktoken openai \
+            pytest pytest-timeout
+      - name: Run tests
+        run: |
+          .test-venv/bin/python -m pytest src/tests/ \
+            -v --tb=short --durations=20 --timeout=120
 
   build:
     needs: test
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      - name: Build Docker image
+      - name: Docker build
         run: docker build -t kettu-mem:test .
-      - name: Smoke test
+      - name: Docker smoke
+        timeout-minutes: 10
         run: |
+          set -euo pipefail
           docker run -d --name kettu-test -p 18765:8765 kettu-mem:test
-          sleep 5
-          curl -s http://localhost:18765/health | grep ok
+          # Wait for server startup (FAISS/Mem0 init can take 30-60s)
+          for i in $(seq 1 45); do
+            if docker logs kettu-test 2>/dev/null | grep -q "Uvicorn running\|Application startup"; then
+              break
+            fi
+            sleep 2
+          done
+          # Now probe health
+          for i in $(seq 1 15); do
+            resp=$(curl -fsS http://localhost:18765/health 2>/dev/null || true)
+            if echo "$resp" | grep -q '"status":"ok"'; then
+              break
+            fi
+            sleep 2
+          done
+          curl -fsS http://localhost:18765/status | grep '"version":"0.3.1"'
+          docker logs kettu-test
           docker stop kettu-test

@@ -9,6 +9,7 @@ Design:
 - Hard payload cap: events > MAX_PAYLOAD_SIZE are stored in artifact store;
   JSONL line contains {"artifact_ref": "path/to/file"} instead of raw content.
 """
+
 import json
 import os
 import time
@@ -51,11 +52,13 @@ class L3VerbatimArchive:
         artifact_path = session_dir / artifact_name
         artifact_path.write_text(content, encoding="utf-8")
         rel_path = f"_artifacts/{session_id}/{artifact_name}"
-        logger.info("l3_artifact_stored",
-                    session_id=session_id,
-                    event_id=event_id,
-                    size_bytes=len(content.encode("utf-8")),
-                    path=rel_path)
+        logger.info(
+            "l3_artifact_stored",
+            session_id=session_id,
+            event_id=event_id,
+            size_bytes=len(content.encode("utf-8")),
+            path=rel_path,
+        )
         return rel_path
 
     def read_artifact(self, artifact_ref: str) -> str:
@@ -69,10 +72,18 @@ class L3VerbatimArchive:
             return ""
         return full_path.read_text(encoding="utf-8")
 
-    def record_event(self, session_id: str, step_id: int, *,
-                     role: str, type: str, content: str,
-                     refs: list = None, meta: dict = None,
-                     timestamp: float = None) -> str:
+    def record_event(
+        self,
+        session_id: str,
+        step_id: int,
+        *,
+        role: str,
+        type: str,
+        content: str,
+        refs: list = None,
+        meta: dict = None,
+        timestamp: float = None,
+    ) -> str:
         """
         Append one event to the session log.
 
@@ -86,12 +97,14 @@ class L3VerbatimArchive:
 
         if content_size > MAX_PAYLOAD_SIZE:
             artifact_ref = self._store_artifact(session_id, event_id, content)
-            logger.info("l3_payload_capped",
-                        session_id=session_id,
-                        event_id=event_id,
-                        original_size=content_size,
-                        cap=MAX_PAYLOAD_SIZE,
-                        artifact_ref=artifact_ref)
+            logger.info(
+                "l3_payload_capped",
+                session_id=session_id,
+                event_id=event_id,
+                original_size=content_size,
+                cap=MAX_PAYLOAD_SIZE,
+                artifact_ref=artifact_ref,
+            )
             event = {
                 "event_id": event_id,
                 "session_id": session_id,

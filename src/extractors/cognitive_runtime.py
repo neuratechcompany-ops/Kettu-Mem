@@ -10,9 +10,9 @@ Key invariants:
 - Context is dynamically assembled per step
 - Reflection runs after every agent turn
 """
+
 import json
 import time
-import uuid
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
@@ -20,30 +20,31 @@ from typing import Optional
 
 
 class StepOutcome(Enum):
-    PROGRESS = "progress"       # задача продвигается
-    STUCK = "stuck"             # задача застряла
-    LOOP = "loop"               # повторяются действия
-    WRONG_TOOL = "wrong_tool"   # выбран неудачный инструмент
+    PROGRESS = "progress"  # задача продвигается
+    STUCK = "stuck"  # задача застряла
+    LOOP = "loop"  # повторяются действия
+    WRONG_TOOL = "wrong_tool"  # выбран неудачный инструмент
     STRATEGY_CHANGE = "strategy_change"  # стоит изменить стратегию
-    COMPLETE = "complete"       # задача выполнена
-    BLOCKED = "blocked"         # внешняя блокировка
+    COMPLETE = "complete"  # задача выполнена
+    BLOCKED = "blocked"  # внешняя блокировка
 
 
 class MemorySpace(Enum):
-    GLOBAL = "global"        # общие знания
-    USER = "user"            # предпочтения пользователя
-    PROJECT = "project"      # проектный контекст
-    SESSION = "session"      # текущая сессия
+    GLOBAL = "global"  # общие знания
+    USER = "user"  # предпочтения пользователя
+    PROJECT = "project"  # проектный контекст
+    SESSION = "session"  # текущая сессия
     TEMPORARY = "temporary"  # рабочая память (volatile)
 
 
 @dataclass
 class PlanStep:
     """One step in the execution plan."""
+
     step_id: int
     description: str
     status: str = "pending"  # pending, in_progress, completed, blocked, skipped
-    tool_hint: str = ""      # suggested tool
+    tool_hint: str = ""  # suggested tool
     result_summary: str = ""
     started_at: float = 0
     completed_at: float = 0
@@ -53,6 +54,7 @@ class PlanStep:
 @dataclass
 class PlanningState:
     """Persistent planning state — survives restarts."""
+
     goal: str = ""
     plan: list[PlanStep] = field(default_factory=list)
     completed_steps: list[int] = field(default_factory=list)
@@ -79,9 +81,16 @@ class PlanningState:
     def to_dict(self) -> dict:
         return {
             "goal": self.goal,
-            "plan": [{"step_id": s.step_id, "description": s.description,
-                       "status": s.status, "tool_hint": s.tool_hint,
-                       "attempts": s.attempts} for s in self.plan],
+            "plan": [
+                {
+                    "step_id": s.step_id,
+                    "description": s.description,
+                    "status": s.status,
+                    "tool_hint": s.tool_hint,
+                    "attempts": s.attempts,
+                }
+                for s in self.plan
+            ],
             "completed_steps": self.completed_steps,
             "blockers": self.blockers,
             "assumptions": self.assumptions,
@@ -100,14 +109,29 @@ class ReflectionEngine:
 
     # Patterns that indicate progress
     PROGRESS_MARKERS = [
-        "найдено", "получено", "создан", "записан", "выполнен",
-        "found", "created", "written", "completed", "success",
+        "найдено",
+        "получено",
+        "создан",
+        "записан",
+        "выполнен",
+        "found",
+        "created",
+        "written",
+        "completed",
+        "success",
     ]
 
     # Patterns that indicate being stuck
     STUCK_MARKERS = [
-        "не удалось", "ошибка", "error", "failed", "timeout",
-        "недоступен", "отказано", "denied", "blocked",
+        "не удалось",
+        "ошибка",
+        "error",
+        "failed",
+        "timeout",
+        "недоступен",
+        "отказано",
+        "denied",
+        "blocked",
     ]
 
     # Patterns that indicate loops
@@ -115,8 +139,9 @@ class ReflectionEngine:
         # Same tool called >3 times with similar params
     ]
 
-    def reflect(self, step_result: dict, plan_state: PlanningState,
-                tool_history: list[dict]) -> dict:
+    def reflect(
+        self, step_result: dict, plan_state: PlanningState, tool_history: list[dict]
+    ) -> dict:
         """
         Analyze one agent turn and return structured reflection.
 
@@ -203,9 +228,9 @@ class ReflectionEngine:
 
         # 5. Strategy change recommendation
         should_change = (
-            loop_detected or
-            stuck_hits >= 3 or
-            (plan_state.current_step() and plan_state.current_step().attempts >= 3)
+            loop_detected
+            or stuck_hits >= 3
+            or (plan_state.current_step() and plan_state.current_step().attempts >= 3)
         )
 
         return {
@@ -234,9 +259,9 @@ class ToolIntelligence:
         self._history: list[dict] = []  # {name, params_hash, result_hash, useful, timestamp}
         self._max_history = 100
 
-    def record_call(self, tool_name: str, params: dict, result: str,
-                    useful: bool = True):
+    def record_call(self, tool_name: str, params: dict, result: str, useful: bool = True):
         import hashlib
+
         entry = {
             "name": tool_name,
             "params_hash": hashlib.md5(json.dumps(params, sort_keys=True).encode()).hexdigest()[:8],
@@ -246,11 +271,12 @@ class ToolIntelligence:
         }
         self._history.append(entry)
         if len(self._history) > self._max_history:
-            self._history = self._history[-self._max_history:]
+            self._history = self._history[-self._max_history :]
 
     def is_duplicate(self, tool_name: str, params: dict) -> bool:
         """Check if the same tool+params was called recently."""
         import hashlib
+
         params_hash = hashlib.md5(json.dumps(params, sort_keys=True).encode()).hexdigest()[:8]
         recent = self._history[-10:]
         for h in recent:
@@ -267,6 +293,7 @@ class ToolIntelligence:
         if len(self._history) < 5:
             return []
         from collections import Counter
+
         name_counts = Counter(h["name"] for h in self._history[-20:])
         useless = Counter(h["name"] for h in self._history[-20:] if not h["useful"])
         patterns = []
@@ -314,8 +341,9 @@ class CognitiveRuntime:
 
     # ── Task management ──────────────────────────────────
 
-    def start_task(self, goal: str, plan_steps: list[str] = None,
-                   space: MemorySpace = MemorySpace.PROJECT):
+    def start_task(
+        self, goal: str, plan_steps: list[str] = None, space: MemorySpace = MemorySpace.PROJECT
+    ):
         """Initialize a new task with goal and optional plan."""
         self.planning_state = PlanningState(
             goal=goal,
@@ -355,8 +383,7 @@ class CognitiveRuntime:
 
     # ── Context building ─────────────────────────────────
 
-    def build_context(self, user_input: str = "",
-                      token_budget: int = 32000) -> tuple[str, dict]:
+    def build_context(self, user_input: str = "", token_budget: int = 32000) -> tuple[str, dict]:
         """
         Dynamic context assembly from all sources.
 
@@ -431,8 +458,13 @@ class CognitiveRuntime:
         if ps.plan:
             parts.append("\n## 📋 Plan")
             for s in ps.plan:
-                icon = {"pending": "⬜", "in_progress": "🔄", "completed": "✅",
-                        "blocked": "🚫", "skipped": "⏭️"}.get(s.status, "⬜")
+                icon = {
+                    "pending": "⬜",
+                    "in_progress": "🔄",
+                    "completed": "✅",
+                    "blocked": "🚫",
+                    "skipped": "⏭️",
+                }.get(s.status, "⬜")
                 parts.append(f"{icon} Step {s.step_id}: {s.description}")
 
         current = ps.current_step()
@@ -442,10 +474,12 @@ class CognitiveRuntime:
                 parts.append(f"Suggested tool: {current.tool_hint}")
 
         if ps.blockers:
-            parts.append(f"\n## 🚫 Blockers\n" + "\n".join(f"- {b}" for b in ps.blockers))
+            parts.append("\n## 🚫 Blockers\n" + "\n".join(f"- {b}" for b in ps.blockers))
 
         if ps.open_questions:
-            parts.append(f"\n## ❓ Open Questions\n" + "\n".join(f"- {q}" for q in ps.open_questions))
+            parts.append(
+                "\n## ❓ Open Questions\n" + "\n".join(f"- {q}" for q in ps.open_questions)
+            )
 
         if ps.next_action:
             parts.append(f"\n## 👉 Next Action\n{ps.next_action}")
@@ -454,14 +488,17 @@ class CognitiveRuntime:
             parts.append(f"\n## 💡 Strategy Notes\n{ps.strategy_notes}")
 
         parts.append(f"\n## 🧠 Memory Space: {self._current_space.value}")
-        parts.append(f"Progress: {ps.progress_pct():.0%} ({len(ps.completed_steps)}/{len(ps.plan)} steps)")
+        parts.append(
+            f"Progress: {ps.progress_pct():.0%} ({len(ps.completed_steps)}/{len(ps.plan)} steps)"
+        )
 
         return "\n".join(parts)
 
     # ── Step recording ───────────────────────────────────
 
-    def record_step(self, response: str, tool_calls: list[dict],
-                    tool_outputs: list[dict], user_input: str = ""):
+    def record_step(
+        self, response: str, tool_calls: list[dict], tool_outputs: list[dict], user_input: str = ""
+    ):
         """Record one agent turn across all layers."""
         self.step_counter += 1
 
@@ -476,16 +513,20 @@ class CognitiveRuntime:
         self.mm.record_event("assistant", "message", response)
 
         for tc in tool_calls:
-            self.mm.record_event("assistant", "tool_call",
-                                 f"{tc.get('name','?')}({json.dumps(tc.get('params',{}))})")
+            self.mm.record_event(
+                "assistant", "tool_call", f"{tc.get('name','?')}({json.dumps(tc.get('params',{}))})"
+            )
             self.tool_intelligence.record_call(
-                tc.get("name", "?"), tc.get("params", {}),
-                "", useful=True  # will update after output
+                tc.get("name", "?"),
+                tc.get("params", {}),
+                "",
+                useful=True,  # will update after output
             )
 
         for to in tool_outputs:
-            self.mm.record_event("tool", to.get("type", "tool_output"),
-                                 to.get("content", "")[:1000])
+            self.mm.record_event(
+                "tool", to.get("type", "tool_output"), to.get("content", "")[:1000]
+            )
 
         # Update tool intelligence with actual results
         for i, tc in enumerate(tool_calls):
@@ -493,8 +534,7 @@ class CognitiveRuntime:
                 to = tool_outputs[i]
                 useful = to.get("type") != "error" and len(to.get("content", "")) > 50
                 self.tool_intelligence.record_call(
-                    tc.get("name", "?"), tc.get("params", {}),
-                    to.get("content", ""), useful=useful
+                    tc.get("name", "?"), tc.get("params", {}), to.get("content", ""), useful=useful
                 )
 
         # Update planning state
@@ -541,8 +581,7 @@ class CognitiveRuntime:
 
         self._save_state()
 
-    def reflect(self, response: str, tool_calls: list[dict],
-                tool_outputs: list[dict]) -> dict:
+    def reflect(self, response: str, tool_calls: list[dict], tool_outputs: list[dict]) -> dict:
         """Run reflection engine on the current step."""
         step_result = {
             "content": response,
@@ -607,11 +646,16 @@ class CognitiveRuntime:
         data = {
             "goal": self.planning_state.goal,
             "plan": [
-                {"step_id": s.step_id, "description": s.description,
-                 "status": s.status, "tool_hint": s.tool_hint,
-                 "result_summary": s.result_summary,
-                 "started_at": s.started_at, "completed_at": s.completed_at,
-                 "attempts": s.attempts}
+                {
+                    "step_id": s.step_id,
+                    "description": s.description,
+                    "status": s.status,
+                    "tool_hint": s.tool_hint,
+                    "result_summary": s.result_summary,
+                    "started_at": s.started_at,
+                    "completed_at": s.completed_at,
+                    "attempts": s.attempts,
+                }
                 for s in self.planning_state.plan
             ],
             "completed_steps": self.planning_state.completed_steps,
@@ -637,9 +681,7 @@ class CognitiveRuntime:
             with open(state_path) as f:
                 data = json.load(f)
             self.planning_state.goal = data.get("goal", "")
-            self.planning_state.plan = [
-                PlanStep(**s) for s in data.get("plan", [])
-            ]
+            self.planning_state.plan = [PlanStep(**s) for s in data.get("plan", [])]
             self.planning_state.completed_steps = data.get("completed_steps", [])
             self.planning_state.blockers = data.get("blockers", [])
             self.planning_state.assumptions = data.get("assumptions", [])
@@ -653,6 +695,7 @@ class CognitiveRuntime:
             return True
         except (json.JSONDecodeError, KeyError, ValueError, TypeError) as e:
             import structlog
+
             logger = structlog.get_logger("cognitive_runtime")
             logger.error("load_state_failed", error=str(e)[:200])
             return False

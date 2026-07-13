@@ -14,9 +14,8 @@ Usage:
   ns = SessionNamespace(project="myproject", workspace="default", agent="main", user="user1")
   ns.session_path()  # → "myproject/default/main/user1/session5"
 """
-from dataclasses import dataclass, field
-from typing import Optional
-from pathlib import Path
+
+from dataclasses import dataclass
 
 
 @dataclass
@@ -26,6 +25,7 @@ class SessionNamespace:
 
     Path format: {project}/{workspace}/{agent}/{user}/{session_id}
     """
+
     project: str = "default"
     workspace: str = "default"
     agent: str = "main"
@@ -52,10 +52,12 @@ class SessionNamespace:
 
     def matches(self, other: "SessionNamespace") -> bool:
         """Check if this namespace matches another (same project/workspace/agent/user)."""
-        return (self.project == other.project and
-                self.workspace == other.workspace and
-                self.agent == other.agent and
-                self.user == other.user)
+        return (
+            self.project == other.project
+            and self.workspace == other.workspace
+            and self.agent == other.agent
+            and self.user == other.user
+        )
 
     def is_ancestor_of(self, other: "SessionNamespace") -> bool:
         """Check if this namespace is ancestor of another."""
@@ -111,9 +113,13 @@ class SessionIsolation:
                agent = ?,
                user_id = ?
                WHERE session_id = ?""",
-            (namespace.project, namespace.workspace,
-             namespace.agent, namespace.user,
-             namespace.session_id)
+            (
+                namespace.project,
+                namespace.workspace,
+                namespace.agent,
+                namespace.user,
+                namespace.session_id,
+            ),
         )
         self.sqlite.conn.commit()
 
@@ -122,8 +128,9 @@ class SessionIsolation:
         path = namespace.path()
         self._active_sessions.pop(path, None)
 
-    def get_sessions_in_namespace(self, namespace: SessionNamespace,
-                                  include_descendants: bool = False) -> list[str]:
+    def get_sessions_in_namespace(
+        self, namespace: SessionNamespace, include_descendants: bool = False
+    ) -> list[str]:
         """
         Get sessions in the same namespace (or descendants).
 
@@ -133,18 +140,17 @@ class SessionIsolation:
         """
         if include_descendants:
             return [
-                sid for sid, ns in self._active_sessions.items()
+                sid
+                for sid, ns in self._active_sessions.items()
                 if namespace.is_ancestor_of(ns) or ns.matches(namespace)
             ]
         else:
             parent = namespace.parent_path()
-            return [
-                sid for sid, ns in self._active_sessions.items()
-                if ns.parent_path() == parent
-            ]
+            return [sid for sid, ns in self._active_sessions.items() if ns.parent_path() == parent]
 
-    def get_events_across_sessions(self, namespace: SessionNamespace,
-                                   limit: int = 50) -> list[dict]:
+    def get_events_across_sessions(
+        self, namespace: SessionNamespace, limit: int = 50
+    ) -> list[dict]:
         """
         Get recent events across all sessions in the same namespace.
 
@@ -160,12 +166,13 @@ class SessionIsolation:
                 WHERE session_id IN ({placeholders})
                 ORDER BY timestamp DESC
                 LIMIT ?""",
-            sessions + [limit]
+            sessions + [limit],
         ).fetchall()
         return [dict(r) for r in reversed(rows)]
 
-    def get_mem0_facts_in_namespace(self, namespace: SessionNamespace,
-                                    limit: int = 20) -> list[dict]:
+    def get_mem0_facts_in_namespace(
+        self, namespace: SessionNamespace, limit: int = 20
+    ) -> list[dict]:
         """
         Get Mem0 facts from all sessions in namespace.
         Useful for cross-session knowledge sharing.
@@ -180,17 +187,17 @@ class SessionIsolation:
                 WHERE source_session IN ({placeholders})
                 ORDER BY confidence DESC, access_count DESC
                 LIMIT ?""",
-            sessions + [limit]
+            sessions + [limit],
         ).fetchall()
         return [dict(r) for r in rows]
 
     def cleanup_expired(self, max_age_hours: int = 72):
         """Remove sessions inactive for > N hours."""
         import time
+
         cutoff = time.time() - max_age_hours * 3600
         self.sqlite.conn.execute(
-            "DELETE FROM sessions WHERE created_at < ? AND status = 'active'",
-            (cutoff,)
+            "DELETE FROM sessions WHERE created_at < ? AND status = 'active'", (cutoff,)
         )
         self.sqlite.conn.commit()
         # Also clean in-memory registry

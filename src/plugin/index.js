@@ -26,19 +26,69 @@ function isCognitiveEnabled() {
   return false;
 }
 
+// ── Tool output serialization ───────────────────────────
+
+function serializeToolOutput(result) {
+  if (result === null || result === undefined) return "(empty)";
+  if (typeof result === "string") return result;
+  if (typeof result === "number" || typeof result === "boolean") return String(result);
+  if (Buffer.isBuffer(result) || result instanceof Uint8Array) {
+    return `[binary: ${result.length} bytes]`;
+  }
+  if (Array.isArray(result)) {
+    // Content blocks: [{type: "text", text: "..."}]
+    const texts = result
+      .filter(b => b && b.text)
+      .map(b => b.text)
+      .join("\n");
+    if (texts) return texts;
+    return result.map(r => serializeToolOutput(r)).join("\n");
+  }
+  if (typeof result === "object") {
+    // Objects: {content: "...", output: "...", text: "...", error: "..."}
+    if (result.content) return serializeToolOutput(result.content);
+    if (result.output) return serializeToolOutput(result.output);
+    if (result.text) return serializeToolOutput(result.text);
+    if (result.error) return `Error: ${result.error}`;
+    try { return JSON.stringify(result, null, 0); }
+    catch { return "[object: could not serialize]"; }
+  }
+  return String(result);
+}
+
+// ── API key resolution ──────────────────────────────────
+
+function getApiKey(config) {
+  if (config?.apiKey) return config.apiKey;
+  return process.env.HERMES_MEMORY_API_KEY || process.env.KETTU_MEM_API_KEY || null;
+}
+
 // ── HTTP client ─────────────────────────────────────────
 
-async function mmFetch(apiUrl, path, body) {
+async function mmFetch(apiUrl, path, body, config) {
+  const apiKey = getApiKey(config);
+  const headers = { "Content-Type": "application/json" };
+  if (apiKey) headers["X-API-Key"] = apiKey;
+
   try {
     const resp = await fetch(`${apiUrl}${path}`, {
       method: body ? "POST" : "GET",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: body ? JSON.stringify(body) : undefined,
       signal: AbortSignal.timeout(5000),
     });
-    if (!resp.ok) return null;
+    if (!resp.ok) {
+      console.warn("[hermes-memory] API error", {
+        endpoint: path, status: resp.status,
+        error: resp.status === 401 ? "unauthorized" : `http_${resp.status}`,
+      });
+      return null;
+    }
     return await resp.json();
-  } catch {
+  } catch (err) {
+    console.warn("[hermes-memory] API unreachable", {
+      endpoint: path, error: err.message || "connection_failed",
+    });
     return null;
   }
 }
@@ -147,16 +197,31 @@ export default {
       const sessionKey = event.context?.sessionKey;
       if (!sessionKey) return;
 
-      const toolOutput = event.result?.content || event.result?.output || "";
+      const toolOutput = event.result?.content || event.result?.output || event.result || "";
       const toolName = event.toolName || "unknown";
       const error = event.result?.error;
+
+      // Serialize tool output safely — never use String(object)
+      const serialized = serializeToolOutput(toolOutput);
+      const fullContent = error
+        ? `Error in ${toolName}: ${String(error).slice(0, 500)}`
+        : `[${toolName}] ${serialized}`;
+
+      // Preview for SQLite/Mem0 (first 2000 chars)
+      const preview = fullContent.slice(0, 2000);
 
       const evt = {
         role: "tool",
         type: error ? "error" : "tool_output",
-        content: error
-          ? `Error in ${toolName}: ${String(error).slice(0, 500)}`
-          : `[${toolName}] ${String(toolOutput).slice(0, 1000)}`,
+        content: fullContent,
+        meta: {
+          tool_name: toolName,
+          original_bytes: typeof toolOutput === "string"
+            ? Buffer.byteLength(toolOutput, "utf8")
+            : Buffer.byteLength(serialized, "utf8"),
+          truncated: fullContent.length > 2000,
+          preview,
+        },
       };
 
       // Memory: record tool output

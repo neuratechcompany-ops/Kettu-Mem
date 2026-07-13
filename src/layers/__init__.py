@@ -9,19 +9,28 @@ Import from the new package names for new code:
 
 Imports from layers.* still work for backward compatibility.
 """
-from storage.l3_verbatim import L3VerbatimArchive
-from storage.sqlite_index import SQLiteMetadataIndex
-from storage.session_isolation import SessionNamespace, SessionIsolation
+
 from embeddings.faiss_index import FAISSSemanticIndex
-from retrieval.context_builder import (
-    ContextBuilder, ContextConfig, BudgetStrategy, ToolSchema,
-)
-from retrieval.hybrid_search import HybridRetriever, BM25Scorer
-from extractors.compression import CompressionEngine, CompressionResult
-from extractors.mem0 import Mem0Store, FactType, Mem0Fact
 from extractors.cognitive_runtime import (
-    CognitiveRuntime, MemorySpace, StepOutcome,
-    ReflectionEngine, ToolIntelligence, PlanStep, PlanningState,
+    CognitiveRuntime,
+    MemorySpace,
+    PlanningState,
+    PlanStep,
+    ReflectionEngine,
+    StepOutcome,
+    ToolIntelligence,
 )
+from extractors.compression import CompressionEngine, CompressionResult
 from extractors.ingestion_filter import IngestionFilter
+from extractors.mem0 import FactType, Mem0Fact, Mem0Store
 from extractors.memory_quality import MemoryQualityScorer, MemoryScore
+from retrieval.context_builder import (
+    BudgetStrategy,
+    ContextBuilder,
+    ContextConfig,
+    ToolSchema,
+)
+from retrieval.hybrid_search import BM25Scorer, HybridRetriever
+from storage.l3_verbatim import L3VerbatimArchive
+from storage.session_isolation import SessionIsolation, SessionNamespace
+from storage.sqlite_index import SQLiteMetadataIndex

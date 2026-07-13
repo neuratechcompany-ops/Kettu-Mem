@@ -20,8 +20,9 @@ Usage:
   scorer = MemoryQualityScorer()
   score = scorer.calculate(fact)
 """
-import time
+
 import math
+import time
 from dataclasses import dataclass
 from enum import Enum
 
@@ -30,6 +31,7 @@ from config import settings
 
 class FactImportance(Enum):
     """Base importance for different fact types."""
+
     DECISION = 1.0
     PREFERENCE = 0.9
     FACT = 0.5
@@ -50,12 +52,13 @@ _TYPE_IMPORTANCE = {
 @dataclass
 class MemoryScore:
     """Structured memory quality score."""
-    total: float          # 0..1 composite score
-    importance: float     # 0..1 type-based
-    recency: float        # 0..1 time-decayed
-    confidence: float     # 0..1 from extraction
-    access: float         # 0..1 from usage
-    is_expired: bool      # TTL exceeded
+
+    total: float  # 0..1 composite score
+    importance: float  # 0..1 type-based
+    recency: float  # 0..1 time-decayed
+    confidence: float  # 0..1 from extraction
+    access: float  # 0..1 from usage
+    is_expired: bool  # TTL exceeded
     days_until_expiry: int
 
 
@@ -109,10 +112,10 @@ class MemoryQualityScorer:
 
         # Composite
         total = (
-            importance * self.w_imp +
-            recency * self.w_rec +
-            confidence * self.w_con +
-            access * self.w_acc
+            importance * self.w_imp
+            + recency * self.w_rec
+            + confidence * self.w_con
+            + access * self.w_acc
         )
         total = max(0.0, min(1.0, total))
 
@@ -135,7 +138,7 @@ class MemoryQualityScorer:
         """Exponential decay: score = decay_rate ^ age_days."""
         if age_days <= 0:
             return 1.0
-        return max(0.0, self.decay_rate ** age_days)
+        return max(0.0, self.decay_rate**age_days)
 
     def batch_score(self, facts: list[dict]) -> list[tuple[dict, MemoryScore]]:
         """Score multiple facts."""

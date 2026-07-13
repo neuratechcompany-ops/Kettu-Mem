@@ -27,21 +27,22 @@ Usage:
   from api.metrics import add_metrics_endpoint
   add_metrics_endpoint(app)
 """
-import time
-import psutil
-import os
-from typing import Optional
-from contextvars import ContextVar
 
+import os
+import time
+
+import psutil
+from fastapi import Response
 from prometheus_client import (
-    Counter, Histogram, Gauge, Info,
-    generate_latest, CONTENT_TYPE_LATEST,
+    CONTENT_TYPE_LATEST,
+    Counter,
+    Gauge,
+    Histogram,
+    Info,
+    generate_latest,
 )
-from fastapi import Request, Response
-from fastapi.responses import PlainTextResponse
 
 from config import settings
-
 
 # ── Metrics Definitions ─────────────────────────────────
 
@@ -136,6 +137,7 @@ build_info = Info(
 
 # ── Metrics Registry ────────────────────────────────────
 
+
 class MetricsRegistry:
     """
     Central metrics registry for Kettu Mem.
@@ -145,12 +147,14 @@ class MetricsRegistry:
 
     def __init__(self):
         self._mm = None  # MemoryManager reference (set by server)
-        build_info.info({
-            "version": "0.2.0",
-            "config_port": str(settings.port),
-            "embedding_backend": settings.embedding_backend,
-            "token_budget_normal": str(settings.token_budget_normal),
-        })
+        build_info.info(
+            {
+                "version": "0.2.0",
+                "config_port": str(settings.port),
+                "embedding_backend": settings.embedding_backend,
+                "token_budget_normal": str(settings.token_budget_normal),
+            }
+        )
 
     def set_memory_manager(self, mm):
         """Bind MemoryManager for gauge updates."""
@@ -217,6 +221,7 @@ metrics = MetricsRegistry()
 
 # ── Metrics Middleware ──────────────────────────────────
 
+
 class MetricsMiddleware:
     """
     ASGI middleware for automatic request metrics.
@@ -252,6 +257,7 @@ class MetricsMiddleware:
 
 
 # ── Metrics endpoint ────────────────────────────────────
+
 
 def add_metrics_endpoint(app):
     """Add Prometheus /metrics endpoint to FastAPI app."""

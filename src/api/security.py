@@ -11,21 +11,21 @@ Usage:
   from api.security import add_security_middleware
   add_security_middleware(app)
 """
-import time
+
 import re
-import hashlib
+import time
 from collections import defaultdict
 from typing import Optional
 
-from fastapi import Request, HTTPException
+from fastapi import Request
 from fastapi.responses import JSONResponse
-from starlette.middleware.base import BaseHTTPMiddleware
 from pydantic import BaseModel, Field, field_validator
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from config import settings
 
-
 # ── Pydantic request models ─────────────────────────────
+
 
 class SessionStartRequest(BaseModel):
     session_id: str = Field(default="", max_length=128)
@@ -34,7 +34,7 @@ class SessionStartRequest(BaseModel):
     @field_validator("session_id")
     @classmethod
     def sanitize_id(cls, v):
-        return re.sub(r'[^\w\-]', '', v)[:128]
+        return re.sub(r"[^\w\-]", "", v)[:128]
 
 
 class SessionEndRequest(BaseModel):
@@ -47,7 +47,8 @@ class TurnBeforeRequest(BaseModel):
     strategy: str = Field(default="normal", max_length=32)
     system_prompt: Optional[str] = Field(default=None, max_length=16384)
     tools: list[dict] = Field(default_factory=list)
-    token_budget: Optional[int] = Field(default=None, ge=100, le=256000)
+    session_id: Optional[str] = None
+    token_budget: Optional[int] = Field(default=None, ge=256, le=128000)
 
     @field_validator("query")
     @classmethod
@@ -58,6 +59,7 @@ class TurnBeforeRequest(BaseModel):
 class TurnAfterRequest(BaseModel):
     events: list[dict] = Field(..., min_length=1)
     extract_facts: bool = True
+    session_id: Optional[str] = None
 
 
 class CompressRequest(BaseModel):
@@ -101,6 +103,7 @@ class CognitiveSpaceRequest(BaseModel):
 
 # ── Input Sanitizer ─────────────────────────────────────
 
+
 class InputSanitizer:
     """Strip dangerous patterns from user inputs."""
 
@@ -128,10 +131,12 @@ class InputSanitizer:
 
 # ── API Key Auth ────────────────────────────────────────
 
+
 def _get_api_key() -> Optional[str]:
     """Resolve API key: HERMES_MEMORY_API_KEY > KETTU_MEM_API_KEY > settings."""
-    import os
     import logging
+    import os
+
     dev_logger = logging.getLogger("kettu-mem.security")
 
     key = os.getenv("HERMES_MEMORY_API_KEY") or settings.api_key
@@ -148,11 +153,16 @@ class APIKeyAuth:
     """API Key authentication middleware."""
 
     def __init__(self, api_key: str = None):
+        self._enabled = True
         self.api_key = api_key or _get_api_key()
-        self.api_key = None  # будет прочитан при первом запросе
+        if not self.api_key:
+            self.api_key = None  # будет прочитан при первом запросе
+            if self.api_key is None:
+                self._enabled = False
 
 
 # ── Rate Limiter ────────────────────────────────────────
+
 
 class RateLimiter:
     """
@@ -179,7 +189,9 @@ class RateLimiter:
         # Trim client windows periodically
         if len(self._clients) > 10000:
             # Keep only last 1000
-            keys = sorted(self._clients.keys(), key=lambda k: self._clients[k][-1] if self._clients[k] else 0)
+            keys = sorted(
+                self._clients.keys(), key=lambda k: self._clients[k][-1] if self._clients[k] else 0
+            )
             for key in keys[:-1000]:
                 del self._clients[key]
 
@@ -206,7 +218,7 @@ class RateLimiter:
         if len(self._clients[client_ip]) >= self.max_requests:
             # Block for window duration
             self._blocked[client_ip] = now + self.window
-            return False, f"rate_limited:too_many_requests"
+            return False, "rate_limited:too_many_requests"
 
         self._clients[client_ip].append(now)
         return True, "ok"
