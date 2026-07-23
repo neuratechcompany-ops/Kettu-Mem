@@ -649,8 +649,13 @@ async def status_get():
             import psutil; mem_usage = psutil.Process().memory_info().rss // (1024*1024)
         except: pass
 
-    if _cr and _cr.last_ingest_at:
-        last_ingest = _cr.last_ingest_at
+    last_ingest = None
+    if _cr:
+        try:
+            if _cr.last_ingest_at:
+                last_ingest = _cr.last_ingest_at
+        except Exception:
+            last_ingest = None
 
     last_err = None
     if _error_buffer:
