@@ -198,7 +198,7 @@ async def lifespan(app: FastAPI):
     _error_buffer = ErrorRingBuffer(Path(data) / "error_buffer.json")
     metrics.set_memory_manager(_mm)
     setup_logging()
-    logger.info("server_starting", data_dir=data, version="0.3.0")
+    logger.info("server_starting", data_dir=data, version="0.3.1")
 
     yield
 
@@ -663,7 +663,7 @@ async def status_get():
 
     return {
         "status": "healthy", "uptime_seconds": int(uptime),
-        "version": "0.3.0",
+        "version": "0.3.1",
         "storage": storage_status, "counts": counts,
         "memory_usage_mb": mem_usage,
         "last_ingest_at": last_ingest,
